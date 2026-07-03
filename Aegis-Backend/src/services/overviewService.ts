@@ -1,7 +1,7 @@
 import { listLearners, UserRow } from '../db/queries/userQueries.js';
 import { firstAndLastPingBulk } from '../db/queries/presenceQueries.js';
 import { findByUserAndDate } from '../db/queries/attendanceHistoryQueries.js';
-import { getSessionConfigs, getSystemConfig } from './configService.js';
+import { getSystemConfig } from './configService.js';
 import { computeTodayStatus, localDayBoundsUtc, localDateStr, TodayStatus } from './statusService.js';
 
 function displayName(row: UserRow): string {
