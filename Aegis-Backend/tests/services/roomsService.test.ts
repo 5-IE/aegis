@@ -83,6 +83,23 @@ describe('getRoomMap', () => {
     expect(r.list[0].user.id).toBe(42);
     expect(r.list[0].x).toBe(1);
   });
+
+  it('returns session=null for admin users', async () => {
+    const { svc, rq, pq, uq, cfg } = await load();
+    (rq.findRoomById as any).mockResolvedValue({ id_room: 1, name: 'Lab A' });
+    (cfg.getSystemConfig as any).mockResolvedValue({ presence_staleness_minutes: 5, timezone: 'Asia/Jakarta' });
+    (pq.currentRoomPerUser as any).mockResolvedValue([
+      { id_user: 99, id_room: 1, last_seen: new Date(), position_x: null, position_y: null, log_id: 1 },
+    ]);
+    (uq.findUserById as any).mockResolvedValue({
+      id_user: 99, username: 'admin', password: '', email: '', role: 'admin',
+      first_name: 'Admin', last_name: null, session: 'AM',
+    });
+
+    const r = await svc.getRoomMap(1, new Date('2026-07-03T02:00:00Z'));
+    expect(r.list).toHaveLength(1);
+    expect(r.list[0].user.session).toBeNull();
+  });
 });
 
 describe('getRoomCurrentOccupants', () => {

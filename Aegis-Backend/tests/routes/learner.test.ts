@@ -85,6 +85,15 @@ describe('GET /me', () => {
     const res = await request(app).get('/api/v1/me');
     expect(res.status).toBe(401);
   });
+
+  it('returns 404 when user not found', async () => {
+    const { app, token } = await buildTestApp();
+    const uq = await import('../../src/db/queries/userQueries.js');
+    (uq.findUserById as any).mockResolvedValue(null);
+    const res = await request(app).get('/api/v1/me').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('not_found');
+  });
 });
 
 describe('GET /dashboard', () => {
@@ -108,11 +117,6 @@ describe('GET /histories', () => {
       list: [{ id_user: 42, date: '2026-07-01', status: 'early' }],
       total: 1,
     });
-    // presence queries return null so times are null
-    const pq = await import('../../src/db/queries/presenceQueries.js').catch(() => null);
-    if (pq) {
-      // mock defensively (may not be loaded on this route)
-    }
     const res = await request(app).get('/api/v1/histories?page=1&per_page=20').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.list[0].date).toBe('2026-07-01');

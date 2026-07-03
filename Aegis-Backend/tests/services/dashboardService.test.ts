@@ -66,6 +66,12 @@ describe('getLearnerDashboard', () => {
     expect(r.leave_taken).toBe(3);
     expect(r.today_status).toBe('Checked In');
   });
+
+  it('throws not_found when user missing', async () => {
+    const { svc, uq } = await load();
+    (uq.findUserById as any).mockResolvedValue(null);
+    await expect(svc.getLearnerDashboard(999, new Date())).rejects.toMatchObject({ code: 'not_found' });
+  });
 });
 
 describe('getAbsenceSummary', () => {
@@ -88,5 +94,20 @@ describe('getAbsenceSummary', () => {
     expect(r.present_summary.late_clock_in).toBe(1);
     expect(r.absent_summary.no_clock_in).toBe(2);
     expect(r.absent_summary.absent).toBe(0);
+  });
+
+  it('counts leave rows as absent', async () => {
+    const { svc, ah, pq, uq, cfg } = await load();
+    (cfg.getSessionConfigs as any).mockResolvedValue({ AM, PM });
+    (cfg.getSystemConfig as any).mockResolvedValue({ presence_staleness_minutes: 5, timezone: 'Asia/Jakarta' });
+    (uq.listLearnerIds as any).mockResolvedValue([1]);
+    (pq.firstAndLastPingBulk as any).mockResolvedValue(new Map());
+    (uq.findUserById as any).mockResolvedValue({ id_user: 1, session: 'AM', role: 'learner', username: 'x', first_name: 'x', last_name: 'y', email: 'a@x', password: '' });
+    (ah.findByUserAndDate as any).mockResolvedValue({ id_user: 1, date: '2026-07-03', status: 'leave' });
+
+    const now = new Date('2026-07-03T02:00:00Z');
+    const r = await svc.getAbsenceSummary(now);
+    expect(r.absent_summary.absent).toBe(1);
+    expect(r.absent_summary.no_clock_in).toBe(0);
   });
 });
