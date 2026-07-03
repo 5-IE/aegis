@@ -34,7 +34,9 @@ describe('tokenService', () => {
   it('rejects a tampered token', async () => {
     const { signAccessToken, verifyAccessToken } = await load();
     const token = signAccessToken({ sub: 1, role: 'admin' });
-    expect(() => verifyAccessToken(token + 'x')).toThrow(/unauthorized/);
+    expect(() => verifyAccessToken(token + 'x')).toThrow(
+      expect.objectContaining({ code: 'unauthorized' }),
+    );
   });
 
   it('generates unique refresh tokens with matching hash', async () => {

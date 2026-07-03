@@ -42,12 +42,12 @@ export function verifyAccessToken(token: string): AccessTokenClaims {
       issuer: 'aegis',
     });
     if (typeof decoded !== 'object' || decoded === null) {
-      throw new AppError('unauthorized', 'unauthorized');
+      throw new AppError('unauthorized');
     }
-    return decoded as AccessTokenClaims;
+    return decoded as unknown as AccessTokenClaims;
   } catch (err) {
     if (err instanceof AppError) throw err;
-    throw new AppError('unauthorized', 'unauthorized');
+    throw new AppError('unauthorized');
   }
 }
 
