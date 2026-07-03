@@ -81,4 +81,19 @@ describe('runRollup', () => {
     expect(r.skipped_leave).toBe(0);
     expect(ah.upsertAttendanceHistory).toHaveBeenCalledWith(5, '2026-07-02', 'late');
   });
+
+  it('buckets as early when first ping exactly equals lateAfterUtc (boundary)', async () => {
+    // Asia/Jakarta = UTC+7. AM late_after = 08:15:00 local on 2026-07-02.
+    // That is 2026-07-02T01:15:00Z.
+    const { svc, ah, pq, uq, cfg } = await load();
+    (cfg.getSessionConfigs as any).mockResolvedValue({ AM, PM });
+    (cfg.getSystemConfig as any).mockResolvedValue({ presence_staleness_minutes: 5, timezone: 'Asia/Jakarta' });
+    (uq.findUserById as any).mockResolvedValue({ id_user: 7, session: 'AM', role: 'learner', username: 'x', first_name: 'x', last_name: 'y', email: 'a@x', password: '' });
+    (ah.findByUserAndDate as any).mockResolvedValue(null);
+    (pq.firstPingForUserInWindow as any).mockResolvedValue(new Date('2026-07-02T01:15:00Z')); // exactly at boundary
+
+    const r = await svc.runRollup({ userId: 7, date: '2026-07-02' });
+    expect(r.processed).toBe(1);
+    expect(ah.upsertAttendanceHistory).toHaveBeenCalledWith(7, '2026-07-02', 'early');
+  });
 });

@@ -96,5 +96,5 @@ export function computeHistoricalStatus(
 ): HistoricalStatus {
   if (existingLeave) return 'leave';
   if (!firstPing) return 'absent';
-  return firstPing < sessionLateAfterUtc ? 'early' : 'late';
+  return firstPing <= sessionLateAfterUtc ? 'early' : 'late';
 }

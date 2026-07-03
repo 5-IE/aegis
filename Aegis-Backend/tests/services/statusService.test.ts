@@ -118,4 +118,17 @@ describe('computeHistoricalStatus', () => {
     const { svc } = await load();
     expect(svc.computeHistoricalStatus(null, new Date('2026-07-03T01:15:00Z'), false)).toBe('absent');
   });
+
+  it('returns early when firstPing equals late_after (boundary)', async () => {
+    const { svc } = await load();
+    const boundary = new Date('2026-07-03T01:15:00Z');
+    expect(svc.computeHistoricalStatus(boundary, boundary, false)).toBe('early');
+  });
+
+  it('leave takes priority even when firstPing exists', async () => {
+    const { svc } = await load();
+    const first = new Date('2026-07-03T01:00:00Z');
+    const lateAfter = new Date('2026-07-03T01:15:00Z');
+    expect(svc.computeHistoricalStatus(first, lateAfter, true)).toBe('leave');
+  });
 });

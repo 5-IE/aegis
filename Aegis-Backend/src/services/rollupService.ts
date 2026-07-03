@@ -6,15 +6,14 @@ import { findUserById, listLearnerIds, UserRow } from '../db/queries/userQueries
 import { combineLocalDateAndTime } from './statusService.js';
 
 function yesterdayInTz(now: Date, tz: string): string {
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
-  const today = fmt.format(now); // YYYY-MM-DD
-  const [y, m, d] = today.split('-').map((x) => Number.parseInt(x, 10));
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() - 1);
-  const yy = dt.getUTCFullYear();
-  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getUTCDate()).padStart(2, '0');
-  return `${yy}-${mm}-${dd}`;
+  // Subtract 12 hours from `now`, then format the earlier instant in tz.
+  // 12h is safely inside "yesterday" regardless of DST direction (max shift is ~1h).
+  // For 3am-local cron: 12h earlier is 3pm previous local day — clearly yesterday.
+  const earlier = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(earlier);
 }
 
 export async function runRollup(input: {
@@ -52,7 +51,7 @@ export async function runRollup(input: {
 
     let status: 'early' | 'late' | 'absent';
     if (!first) status = 'absent';
-    else if (first < lateAfterUtc) status = 'early';
+    else if (first <= lateAfterUtc) status = 'early';
     else status = 'late';
 
     await upsertAttendanceHistory(userId, date, status);
