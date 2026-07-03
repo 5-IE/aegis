@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aegis API Reference (draft) — 2026-07-03</title>
+<style>
+  :root {
+    --fg: #1a1a1a;
+    --muted: #6a6a6a;
+    --bg: #ffffff;
+    --panel: #f7f7f8;
+    --panel-2: #eef0f2;
+    --border: #d9dbdd;
+    --accent: #245bd8;
+    --code-bg: #0f1319;
+    --code-fg: #d5dae2;
+    --get: #216e39;
+    --post: #b45309;
+    --put: #6d28d9;
+    --del: #b91c1c;
+    --auth-learner: #245bd8;
+    --auth-admin: #7c2d12;
+    --auth-public: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  aside {
+    position: sticky; top: 0; align-self: start;
+    height: 100vh; overflow-y: auto;
+    background: var(--panel); border-right: 1px solid var(--border);
+    padding: 24px 20px;
+  }
+  aside h1 { font-size: 16px; margin: 0 0 4px; letter-spacing: 0.2px; }
+  aside .subtitle { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+  aside .group { margin-bottom: 22px; }
+  aside .group-title { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  aside ul { list-style: none; padding: 0; margin: 0; }
+  aside li { margin: 2px 0; }
+  aside li a { display: block; padding: 4px 6px; border-radius: 4px; color: var(--fg); font-size: 13px; }
+  aside li a:hover { background: var(--panel-2); text-decoration: none; }
+  aside .method {
+    display: inline-block; width: 42px; font-size: 10px; font-weight: 700; text-align: center;
+    margin-right: 6px; padding: 1px 4px; border-radius: 3px; color: #fff; vertical-align: middle;
+  }
+  main { padding: 40px 56px 120px; max-width: 900px; }
+  h2 { font-size: 22px; margin: 0 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 17px; margin: 0 0 4px; }
+  section.endpoint { margin: 40px 0 0; padding-top: 24px; border-top: 1px solid var(--border); }
+  section.endpoint:first-of-type { border-top: none; padding-top: 0; margin-top: 20px; }
+  .method-line { display: flex; align-items: center; gap: 10px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .method-badge {
+    display: inline-block; font-weight: 700; font-size: 12px; padding: 3px 8px; border-radius: 4px; color: #fff; letter-spacing: 0.4px;
+  }
+  .m-GET { background: var(--get); }
+  .m-POST { background: var(--post); }
+  .m-PUT { background: var(--put); }
+  .m-DELETE { background: var(--del); }
+  code.path { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel-2); padding: 4px 8px; border-radius: 4px; }
+  .auth {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px; color: #fff; letter-spacing: 0.3px;
+  }
+  .auth-learner { background: var(--auth-learner); }
+  .auth-admin { background: var(--auth-admin); }
+  .auth-public { background: var(--auth-public); }
+  p.summary { color: var(--muted); margin: 4px 0 16px; }
+  h4 { margin: 20px 0 6px; font-size: 13px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 4px 0 8px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+  td code { font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel-2); padding: 1px 5px; border-radius: 3px; }
+  td.opt { color: var(--muted); }
+  pre {
+    background: var(--code-bg); color: var(--code-fg); padding: 14px 16px;
+    border-radius: 6px; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow-x: auto; margin: 6px 0 12px;
+  }
+  pre .k { color: #7dd3fc; }        /* keys */
+  pre .s { color: #a7f3d0; }        /* strings */
+  pre .n { color: #fbbf24; }        /* numbers */
+  pre .c { color: #6b7280; font-style: italic; }
+  ul.compact { margin: 6px 0 10px; padding-left: 22px; }
+  ul.compact li { margin: 2px 0; font-size: 14px; }
+  .callout { background: #fff7ed; border-left: 3px solid #f59e0b; padding: 10px 14px; margin: 12px 0; border-radius: 4px; font-size: 14px; color: #78350f; }
+  .callout.info { background: #eff6ff; border-color: #3b82f6; color: #1e3a8a; }
+  .callout.warn { background: #fef2f2; border-color: #ef4444; color: #7f1d1d; }
+  .pill { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--panel-2); color: var(--fg); margin-left: 4px; }
+  .status-list li { margin: 2px 0; }
+  header.hero { border-bottom: 1px solid var(--border); padding-bottom: 22px; margin-bottom: 6px; }
+  header.hero h1 { margin: 0 0 6px; font-size: 26px; }
+  header.hero p { margin: 0; color: var(--muted); font-size: 14px; }
+  .schema-heading { font-size: 15px; margin: 22px 0 6px; }
+  .anchor { scroll-margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<aside>
+  <h1>Aegis API</h1>
+  <div class="subtitle">Draft reference · 2026-07-03</div>
+
+  <div class="group">
+    <div class="group-title">Overview</div>
+    <ul>
+      <li><a href="#overview">Introduction</a></li>
+      <li><a href="#conventions">Conventions</a></li>
+      <li><a href="#auth-header">Authentication</a></li>
+      <li><a href="#errors">Error format</a></li>
+      <li><a href="#pagination">Pagination</a></li>
+      <li><a href="#resources">Shared resources</a></li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Auth</div>
+    <ul>
+      <li><a href="#auth-login"><span class="method m-POST">POST</span>/auth/login</a></li>
+      <li><a href="#auth-refresh"><span class="method m-POST">POST</span>/auth/refresh</a></li>
+      <li><a href="#auth-logout"><span class="method m-POST">POST</span>/auth/logout</a></li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Learner</div>
+    <ul>
+      <li><a href="#me"><span class="method m-GET">GET</span>/me</a></li>
+      <li><a href="#dashboard"><span class="method m-GET">GET</span>/dashboard</a></li>
+      <li><a href="#histories"><span class="method m-GET">GET</span>/histories</a></li>
+      <li><a href="#presence"><span class="method m-POST">POST</span>/presence</a></li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Admin · Dashboard</div>
+    <ul>
+      <li><a href="#absence-summary"><span class="method m-GET">GET</span>/absence-summary</a></li>
+      <li><a href="#overview"><span class="method m-GET">GET</span>/overview</a></li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Admin · Live Radar</div>
+    <ul>
+      <li><a href="#rooms"><span class="method m-GET">GET</span>/rooms</a></li>
+      <li><a href="#room-map"><span class="method m-GET">GET</span>/rooms/:id/map</a></li>
+      <li><a href="#room-occupants"><span class="method m-GET">GET</span>/rooms/:id/current-occupants</a></li>
+      <li><a href="#room-sensors"><span class="method m-GET">GET</span>/rooms/:id/additional-data</a></li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Admin · Config</div>
+    <ul>
+      <li><a href="#session-config"><span class="method m-GET">GET</span>/session-config</a></li>
+      <li><a href="#session-config-put"><span class="method m-PUT">PUT</span>/session-config/:session</a></li>
+      <li><a href="#system-config"><span class="method m-GET">GET</span>/system-config</a></li>
+      <li><a href="#system-config-put"><span class="method m-PUT">PUT</span>/system-config</a></li>
+    </ul>
+  </div>
+</aside>
+
+<main>
+
+<header class="hero">
+  <h1>Aegis API Reference</h1>
+  <p>Attendance backend for Aegis. All application endpoints listed below are proposed. Auth endpoints (<code>/auth/*</code>) are already implemented.</p>
+</header>
+
+<section id="overview" class="anchor">
+  <h2>Introduction</h2>
+  <p class="summary">The Aegis backend serves two first-party native clients: an iPhone learner app and a macOS admin app. Learners ping the backend every N minutes when their phone detects a classroom iBeacon; admins view live occupancy, attendance history, and configuration. All responses are JSON.</p>
+
+  <h4>Base URL</h4>
+  <pre><span class="s">https://aegis.example.com</span></pre>
+  <p class="summary">Paths in this document are shown relative to that base. Auth endpoints use <code>/auth/*</code>; application endpoints are versioned under <code>/api/v1/*</code>.</p>
+</section>
+
+<section id="conventions" class="anchor">
+  <h2>Conventions</h2>
+  <ul class="compact">
+    <li><strong>Field naming:</strong> request and response bodies use <code>snake_case</code>.</li>
+    <li><strong>Timestamps:</strong> ISO-8601 UTC, e.g. <code>2026-07-03T08:14:22Z</code>, unless otherwise stated.</li>
+    <li><strong>Dates:</strong> <code>YYYY-MM-DD</code>, interpreted in the deployment timezone from <code>SYSTEM_CONFIG.timezone</code>.</li>
+    <li><strong>Times of day:</strong> <code>HH:MM:SS</code>, 24-hour, in the deployment timezone.</li>
+    <li><strong>Content type:</strong> requests with bodies send <code>Content-Type: application/json</code>.</li>
+    <li><strong>Body size:</strong> the server rejects request bodies larger than 64 KB.</li>
+  </ul>
+</section>
+
+<section id="auth-header" class="anchor">
+  <h2>Authentication</h2>
+  <p class="summary">All application endpoints require an access token in the <code>Authorization</code> header. Tokens are obtained via <code>POST /auth/login</code> and refreshed via <code>POST /auth/refresh</code>. See the Auth section below for the full flow.</p>
+  <pre><span class="k">Authorization:</span> Bearer &lt;access_token&gt;</pre>
+
+  <table>
+    <tr><th>Badge</th><th>Meaning</th></tr>
+    <tr><td><span class="auth auth-public">public</span></td><td>No authentication required.</td></tr>
+    <tr><td><span class="auth auth-learner">learner</span></td><td>Requires a learner access token.</td></tr>
+    <tr><td><span class="auth auth-admin">admin</span></td><td>Requires an admin access token.</td></tr>
+  </table>
+</section>
+
+<section id="errors" class="anchor">
+  <h2>Error format</h2>
+  <p class="summary">All error responses share the same shape:</p>
+  <pre>{
+  <span class="k">"error"</span>: <span class="s">"invalid_credentials"</span>,
+  <span class="k">"message"</span>: <span class="s">"Username or password is incorrect"</span>
+}</pre>
+
+  <table>
+    <tr><th>Code</th><th>Status</th><th>Meaning</th></tr>
+    <tr><td><code>invalid_request</code></td><td>400</td><td>Body malformed or fails schema validation.</td></tr>
+    <tr><td><code>invalid_credentials</code></td><td>401</td><td>Login credentials rejected.</td></tr>
+    <tr><td><code>invalid_grant</code></td><td>401</td><td>Refresh token unknown, expired, or reused.</td></tr>
+    <tr><td><code>unauthorized</code></td><td>401</td><td>Missing or invalid access token.</td></tr>
+    <tr><td><code>forbidden</code></td><td>403</td><td>Authenticated, but role is insufficient.</td></tr>
+    <tr><td><code>not_found</code></td><td>404</td><td>Resource does not exist.</td></tr>
+    <tr><td><code>too_many_requests</code></td><td>429</td><td>Rate limit exceeded.</td></tr>
+    <tr><td><code>internal_error</code></td><td>500</td><td>Unexpected server error.</td></tr>
+  </table>
+</section>
+
+<section id="pagination" class="anchor">
+  <h2>Pagination</h2>
+  <p class="summary">List endpoints accept <code>page</code> (1-indexed) and <code>per_page</code> query parameters. Responses include the paged list and metadata.</p>
+  <table>
+    <tr><th>Param</th><th>Type</th><th>Default</th><th>Max</th></tr>
+    <tr><td><code>page</code></td><td>integer</td><td>1</td><td>—</td></tr>
+    <tr><td><code>per_page</code></td><td>integer</td><td>20</td><td>100</td></tr>
+  </table>
+  <pre>{
+  <span class="k">"list"</span>: [ ... ],
+  <span class="k">"page"</span>: <span class="n">1</span>,
+  <span class="k">"per_page"</span>: <span class="n">20</span>,
+  <span class="k">"total"</span>: <span class="n">137</span>
+}</pre>
+</section>
+
+<section id="resources" class="anchor">
+  <h2>Shared resources</h2>
+
+  <h3 class="schema-heading">RoomResource</h3>
+  <pre>{ <span class="k">"id"</span>: <span class="n">1</span>, <span class="k">"name"</span>: <span class="s">"Lab 3.02"</span> }</pre>
+
+  <h3 class="schema-heading">UserResource</h3>
+  <pre>{
+  <span class="k">"id"</span>: <span class="n">42</span>,
+  <span class="k">"name"</span>: <span class="s">"Alice Doe"</span>,       <span class="c">// first_name + last_name joined</span>
+  <span class="k">"session"</span>: <span class="s">"AM"</span>              <span class="c">// null for admins</span>
+}</pre>
+
+  <h3 class="schema-heading">LogResource</h3>
+  <pre>{
+  <span class="k">"id"</span>: <span class="n">10921</span>,
+  <span class="k">"user"</span>: { <span class="c">/* UserResource */</span> },
+  <span class="k">"x"</span>: <span class="n">4.2</span>,
+  <span class="k">"y"</span>: <span class="n">7.1</span>
+}</pre>
+</section>
+
+<!-- ================== AUTH ================== -->
+
+<section id="auth-login" class="endpoint anchor">
+  <h2>Log in <span class="pill">implemented</span></h2>
+  <div class="method-line">
+    <span class="method-badge m-POST">POST</span>
+    <code class="path">/auth/login</code>
+    <span class="auth auth-public">public</span>
+  </div>
+  <p class="summary">Exchange username and password for an access token and rotating refresh token.</p>
+
+  <h4>Request body</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Constraints</th></tr>
+    <tr><td><code>username</code></td><td>string</td><td>1–50 chars</td></tr>
+    <tr><td><code>password</code></td><td>string</td><td>1–72 chars</td></tr>
+  </table>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"access_token"</span>: <span class="s">"eyJhbGciOi..."</span>,
+  <span class="k">"refresh_token"</span>: <span class="s">"5f4b7c...base64url"</span>,
+  <span class="k">"expires_in"</span>: <span class="n">900</span>,
+  <span class="k">"user"</span>: {
+    <span class="k">"id"</span>: <span class="n">42</span>,
+    <span class="k">"username"</span>: <span class="s">"alice"</span>,
+    <span class="k">"role"</span>: <span class="s">"learner"</span>,
+    <span class="k">"session"</span>: <span class="s">"AM"</span>,
+    <span class="k">"first_name"</span>: <span class="s">"Alice"</span>,
+    <span class="k">"last_name"</span>: <span class="s">"Doe"</span>,
+    <span class="k">"email"</span>: <span class="s">"alice@example.com"</span>
+  }
+}</pre>
+
+  <h4>Errors</h4>
+  <ul class="compact">
+    <li><code>400 invalid_request</code> — body malformed.</li>
+    <li><code>401 invalid_credentials</code> — user unknown or wrong password.</li>
+    <li><code>429 too_many_requests</code> — 5 failures per (ip+username) in 15 min.</li>
+  </ul>
+</section>
+
+<section id="auth-refresh" class="endpoint anchor">
+  <h2>Refresh access token <span class="pill">implemented</span></h2>
+  <div class="method-line">
+    <span class="method-badge m-POST">POST</span>
+    <code class="path">/auth/refresh</code>
+    <span class="auth auth-public">public</span>
+  </div>
+  <p class="summary">Rotate a refresh token; returns a new access + refresh pair. Reusing an already-revoked refresh token cascade-revokes every refresh token for that user.</p>
+
+  <h4>Request body</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Constraints</th></tr>
+    <tr><td><code>refresh_token</code></td><td>string</td><td>1–256 chars</td></tr>
+  </table>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"access_token"</span>: <span class="s">"eyJhbGciOi..."</span>,
+  <span class="k">"refresh_token"</span>: <span class="s">"9c1a2f...base64url"</span>,
+  <span class="k">"expires_in"</span>: <span class="n">900</span>
+}</pre>
+
+  <h4>Errors</h4>
+  <ul class="compact">
+    <li><code>400 invalid_request</code></li>
+    <li><code>401 invalid_grant</code> — token unknown / expired / reused.</li>
+    <li><code>429 too_many_requests</code></li>
+  </ul>
+</section>
+
+<section id="auth-logout" class="endpoint anchor">
+  <h2>Log out <span class="pill">implemented</span></h2>
+  <div class="method-line">
+    <span class="method-badge m-POST">POST</span>
+    <code class="path">/auth/logout</code>
+    <span class="auth auth-public">public</span>
+  </div>
+  <p class="summary">Revoke a refresh token. Idempotent — an unknown or already-revoked token still returns <code>204</code>. The paired access token remains valid until its 15-minute expiry.</p>
+
+  <h4>Request body</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Constraints</th></tr>
+    <tr><td><code>refresh_token</code></td><td>string</td><td>1–256 chars</td></tr>
+  </table>
+
+  <h4>Response</h4>
+  <ul class="compact"><li><code>204 No Content</code></li></ul>
+</section>
+
+<!-- ================== LEARNER ================== -->
+
+<section id="me" class="endpoint anchor">
+  <h2>Get my profile</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/me</code>
+    <span class="auth auth-learner">learner</span>
+  </div>
+  <p class="summary">Return the authenticated learner's profile.</p>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"id"</span>: <span class="n">42</span>,
+  <span class="k">"first_name"</span>: <span class="s">"Alice"</span>,
+  <span class="k">"last_name"</span>: <span class="s">"Doe"</span>,
+  <span class="k">"username"</span>: <span class="s">"alice"</span>,
+  <span class="k">"email"</span>: <span class="s">"alice@example.com"</span>,
+  <span class="k">"role"</span>: <span class="s">"learner"</span>,
+  <span class="k">"session"</span>: <span class="s">"AM"</span>
+}</pre>
+  <div class="callout info">The UI wireframe only reads <code>first_name</code>; the additional fields are returned as a convenience so the app doesn't need to re-fetch after login.</div>
+</section>
+
+<section id="dashboard" class="endpoint anchor">
+  <h2>Learner dashboard</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/dashboard</code>
+    <span class="auth auth-learner">learner</span>
+  </div>
+  <p class="summary">Aggregated attendance counters and today's status.</p>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"total_attendance"</span>: <span class="n">92</span>,    <span class="c">// ATTENDANCE_HISTORY rows where status in ('early','late')</span>
+  <span class="k">"total_late"</span>: <span class="n">7</span>,           <span class="c">// ATTENDANCE_HISTORY rows where status = 'late'</span>
+  <span class="k">"leave_taken"</span>: <span class="n">3</span>,          <span class="c">// ATTENDANCE_HISTORY rows where status = 'leave'</span>
+  <span class="k">"today_status"</span>: <span class="s">"Checked In"</span>
+}</pre>
+
+  <h4><code>today_status</code> values</h4>
+  <table class="status-list">
+    <tr><th>Value</th><th>Condition</th></tr>
+    <tr><td><code>"Not Checked In"</code></td><td>No presence log today, current time within or before session window.</td></tr>
+    <tr><td><code>"Running Late"</code></td><td>No ping yet, current time past <code>late_after</code>, before <code>end_time</code>.</td></tr>
+    <tr><td><code>"Checked In"</code></td><td>Ping received today; most recent ping within staleness window.</td></tr>
+    <tr><td><code>"Checked Out"</code></td><td>Ping received today; session <code>end_time</code> has passed and last ping is older than the staleness window.</td></tr>
+    <tr><td><code>"Not Checked Out"</code></td><td>Session ended, but a ping arrived within the staleness window (still detected).</td></tr>
+    <tr><td><code>"Off"</code></td><td>Today's <code>ATTENDANCE_HISTORY</code> row is <code>leave</code>, or the user has no active session assignment.</td></tr>
+  </table>
+</section>
+
+<section id="histories" class="endpoint anchor">
+  <h2>Attendance history</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/histories</code>
+    <span class="auth auth-learner">learner</span>
+  </div>
+  <p class="summary">Paged list of the learner's daily attendance rows. Times of day are derived from the first and last <code>PRESENCE_LOG</code> ping on each date.</p>
+
+  <h4>Query parameters</h4>
+  <table>
+    <tr><th>Param</th><th>Type</th><th>Notes</th></tr>
+    <tr><td class="opt"><code>month</code></td><td>integer 1–12</td><td>Optional filter; requires <code>year</code>.</td></tr>
+    <tr><td class="opt"><code>year</code></td><td>integer</td><td>Optional filter.</td></tr>
+    <tr><td class="opt"><code>page</code></td><td>integer</td><td>Default <code>1</code>.</td></tr>
+    <tr><td class="opt"><code>per_page</code></td><td>integer</td><td>Default <code>20</code>, max <code>100</code>.</td></tr>
+  </table>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"list"</span>: [
+    {
+      <span class="k">"date"</span>: <span class="s">"2026-07-01"</span>,
+      <span class="k">"checked_in_at"</span>: <span class="s">"2026-07-01T08:04:12Z"</span>,
+      <span class="k">"checked_out_at"</span>: <span class="s">"2026-07-01T11:58:41Z"</span>,
+      <span class="k">"status"</span>: <span class="s">"early"</span>
+    },
+    {
+      <span class="k">"date"</span>: <span class="s">"2026-07-02"</span>,
+      <span class="k">"checked_in_at"</span>: <span class="k">null</span>,
+      <span class="k">"checked_out_at"</span>: <span class="k">null</span>,
+      <span class="k">"status"</span>: <span class="s">"leave"</span>
+    }
+  ],
+  <span class="k">"page"</span>: <span class="n">1</span>,
+  <span class="k">"per_page"</span>: <span class="n">20</span>,
+  <span class="k">"total"</span>: <span class="n">137</span>
+}</pre>
+
+  <h4><code>status</code> values</h4>
+  <ul class="compact">
+    <li><code>"early"</code> — first ping before <code>SESSION_CONFIG.late_after</code>.</li>
+    <li><code>"late"</code> — first ping at or after <code>late_after</code>, before <code>end_time</code>.</li>
+    <li><code>"leave"</code> — recorded leave.</li>
+    <li><code>"absent"</code> — no ping in the session window.</li>
+  </ul>
+</section>
+
+<section id="presence" class="endpoint anchor">
+  <h2>Report presence</h2>
+  <div class="method-line">
+    <span class="method-badge m-POST">POST</span>
+    <code class="path">/api/v1/presence</code>
+    <span class="auth auth-learner">learner</span>
+  </div>
+  <p class="summary">Called by the iPhone app whenever it detects an iBeacon. The backend resolves the beacon to a room and writes a <code>PRESENCE_LOG</code> row.</p>
+
+  <div class="callout">
+    Not in the original UI list, but the read endpoints have nothing to serve without it. This is the write path that populates <code>PRESENCE_LOG</code>.
+  </div>
+
+  <h4>Request body</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><code>beacon_identifier</code></td><td>string</td><td>1–100 chars, matches <code>DEVICE.identifier</code>.</td></tr>
+    <tr><td class="opt"><code>position_x</code></td><td>float</td><td>Optional; forwarded to <code>PRESENCE_LOG.position_x</code>.</td></tr>
+    <tr><td class="opt"><code>position_y</code></td><td>float</td><td>Optional.</td></tr>
+    <tr><td class="opt"><code>battery_level</code></td><td>integer 0–100</td><td>Optional; phone battery %.</td></tr>
+  </table>
+
+  <h4>Response</h4>
+  <ul class="compact"><li><code>204 No Content</code></li></ul>
+
+  <h4>Errors</h4>
+  <ul class="compact">
+    <li><code>400 invalid_request</code> — body malformed, or beacon unknown / unassigned to a room.</li>
+    <li><code>429 too_many_requests</code> — hard cap 20 pings per learner per minute.</li>
+  </ul>
+</section>
+
+<!-- ================== ADMIN · DASHBOARD ================== -->
+
+<section id="absence-summary" class="endpoint anchor">
+  <h2>Absence summary (today)</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/admin/absence-summary</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+  <p class="summary">Counts across all learners for the current local date.</p>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"present_summary"</span>: {
+    <span class="k">"on_time"</span>: <span class="n">54</span>,       <span class="c">// first ping <= late_after</span>
+    <span class="k">"late_clock_in"</span>: <span class="n">6</span>   <span class="c">// first ping > late_after</span>
+  },
+  <span class="k">"absent_summary"</span>: {
+    <span class="k">"absent"</span>: <span class="n">3</span>,          <span class="c">// on leave OR session ended without any ping</span>
+    <span class="k">"no_clock_in"</span>: <span class="n">2</span>      <span class="c">// no ping yet AND session not yet ended</span>
+  }
+}</pre>
+</section>
+
+<section id="overview" class="endpoint anchor">
+  <h2>Today overview</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/admin/overview</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+  <p class="summary">Per-learner attendance snapshot for today. Sortable client-side; server returns a stable order (name asc).</p>
+
+  <h4>Query parameters</h4>
+  <table>
+    <tr><th>Param</th><th>Type</th><th>Notes</th></tr>
+    <tr><td class="opt"><code>name</code></td><td>string</td><td>Case-insensitive substring match on <code>first_name last_name</code>.</td></tr>
+    <tr><td class="opt"><code>session</code></td><td><code>"AM"</code> or <code>"PM"</code></td><td>Filter by learner session.</td></tr>
+    <tr><td class="opt"><code>page</code></td><td>integer</td><td>Default <code>1</code>.</td></tr>
+    <tr><td class="opt"><code>per_page</code></td><td>integer</td><td>Default <code>20</code>, max <code>100</code>.</td></tr>
+  </table>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"list"</span>: [
+    {
+      <span class="k">"name"</span>: <span class="s">"Alice Doe"</span>,
+      <span class="k">"session"</span>: <span class="s">"AM"</span>,
+      <span class="k">"clocked_in_at"</span>: <span class="s">"2026-07-03T08:04:12Z"</span>,
+      <span class="k">"clocked_out_at"</span>: <span class="k">null</span>,
+      <span class="k">"status"</span>: <span class="s">"Checked In"</span>
+    }
+  ],
+  <span class="k">"page"</span>: <span class="n">1</span>,
+  <span class="k">"per_page"</span>: <span class="n">20</span>,
+  <span class="k">"total"</span>: <span class="n">65</span>
+}</pre>
+  <p class="summary"><code>status</code> uses the same 6 values as the learner dashboard.</p>
+</section>
+
+<!-- ================== ADMIN · LIVE RADAR ================== -->
+
+<section id="rooms" class="endpoint anchor">
+  <h2>List rooms</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/admin/rooms</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"list"</span>: [
+    { <span class="k">"id"</span>: <span class="n">1</span>, <span class="k">"name"</span>: <span class="s">"Lab 3.02"</span> },
+    { <span class="k">"id"</span>: <span class="n">2</span>, <span class="k">"name"</span>: <span class="s">"Lab 3.03"</span> }
+  ]
+}</pre>
+</section>
+
+<section id="room-map" class="endpoint anchor">
+  <h2>Room live map</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/admin/rooms/:room_id/map</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+  <p class="summary">Latest known position of each user currently in the room, based on the most recent <code>PRESENCE_LOG</code> per user within the staleness window (<code>SYSTEM_CONFIG.presence_staleness_minutes</code>).</p>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"list"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="n">10921</span>,
+      <span class="k">"user"</span>: { <span class="k">"id"</span>: <span class="n">42</span>, <span class="k">"name"</span>: <span class="s">"Alice Doe"</span>, <span class="k">"session"</span>: <span class="s">"AM"</span> },
+      <span class="k">"x"</span>: <span class="n">4.2</span>,
+      <span class="k">"y"</span>: <span class="n">7.1</span>
+    }
+  ]
+}</pre>
+
+  <h4>Errors</h4>
+  <ul class="compact"><li><code>404 not_found</code> — room does not exist.</li></ul>
+</section>
+
+<section id="room-occupants" class="endpoint anchor">
+  <h2>Current occupants</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/admin/rooms/:room_id/current-occupants</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+  <p class="summary">Users currently in the room (last ping in the room within the staleness window). <code>duration_seconds</code> is the elapsed time since the user's <em>first ping today</em>, regardless of room switches.</p>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"list"</span>: [
+    {
+      <span class="k">"user"</span>: { <span class="k">"id"</span>: <span class="n">42</span>, <span class="k">"name"</span>: <span class="s">"Alice Doe"</span>, <span class="k">"session"</span>: <span class="s">"AM"</span> },
+      <span class="k">"duration_seconds"</span>: <span class="n">4823</span>,
+      <span class="k">"status"</span>: <span class="s">"Checked In"</span>
+    }
+  ]
+}</pre>
+
+  <h4>Errors</h4>
+  <ul class="compact"><li><code>404 not_found</code> — room does not exist.</li></ul>
+</section>
+
+<section id="room-sensors" class="endpoint anchor">
+  <h2>Room additional data <span class="pill">mocked</span></h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/admin/rooms/:room_id/additional-data</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+  <p class="summary">Environmental readings for the room. Mocked with fixed values in v1 — no sensor table yet.</p>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"room_temperature"</span>: <span class="n">24.5</span>,   <span class="c">// celsius</span>
+  <span class="k">"humidity"</span>: <span class="n">62</span>,               <span class="c">// percent</span>
+  <span class="k">"people_in_room"</span>: <span class="n">18</span>          <span class="c">// current occupant count</span>
+}</pre>
+  <div class="callout">Temperature and humidity return a fixed value in v1. <code>people_in_room</code> uses the same live count as the occupants endpoint. Real sensor integration is a future milestone.</div>
+</section>
+
+<!-- ================== ADMIN · CONFIG ================== -->
+
+<section id="session-config" class="endpoint anchor">
+  <h2>Get session config</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/admin/session-config</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+  <p class="summary">Return AM and PM window definitions used for status computation.</p>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"AM"</span>: { <span class="k">"start_time"</span>: <span class="s">"08:00:00"</span>, <span class="k">"late_after"</span>: <span class="s">"08:15:00"</span>, <span class="k">"end_time"</span>: <span class="s">"12:00:00"</span> },
+  <span class="k">"PM"</span>: { <span class="k">"start_time"</span>: <span class="s">"13:00:00"</span>, <span class="k">"late_after"</span>: <span class="s">"13:15:00"</span>, <span class="k">"end_time"</span>: <span class="s">"17:00:00"</span> }
+}</pre>
+</section>
+
+<section id="session-config-put" class="endpoint anchor">
+  <h2>Update one session</h2>
+  <div class="method-line">
+    <span class="method-badge m-PUT">PUT</span>
+    <code class="path">/api/v1/admin/session-config/:session</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+  <p class="summary">Path parameter <code>:session</code> is <code>AM</code> or <code>PM</code>.</p>
+
+  <h4>Request body</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><code>start_time</code></td><td>string <code>HH:MM:SS</code></td><td>&lt; <code>late_after</code>.</td></tr>
+    <tr><td><code>late_after</code></td><td>string <code>HH:MM:SS</code></td><td>Between <code>start_time</code> and <code>end_time</code>.</td></tr>
+    <tr><td><code>end_time</code></td><td>string <code>HH:MM:SS</code></td><td>&gt; <code>late_after</code>.</td></tr>
+  </table>
+
+  <h4>Response</h4>
+  <ul class="compact"><li><code>204 No Content</code></li></ul>
+
+  <h4>Errors</h4>
+  <ul class="compact"><li><code>400 invalid_request</code> — malformed body or invalid ordering.</li></ul>
+</section>
+
+<section id="system-config" class="endpoint anchor">
+  <h2>Get system config</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/admin/system-config</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"presence_staleness_minutes"</span>: <span class="n">5</span>,
+  <span class="k">"timezone"</span>: <span class="s">"Asia/Jakarta"</span>
+}</pre>
+</section>
+
+<section id="system-config-put" class="endpoint anchor">
+  <h2>Update system config</h2>
+  <div class="method-line">
+    <span class="method-badge m-PUT">PUT</span>
+    <code class="path">/api/v1/admin/system-config</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+  <p class="summary">Partial update. Only fields present in the body are changed. Effective within 30 seconds across the fleet (in-process TTL cache).</p>
+
+  <h4>Request body</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
+    <tr><td class="opt"><code>presence_staleness_minutes</code></td><td>integer</td><td>1–60.</td></tr>
+    <tr><td class="opt"><code>timezone</code></td><td>string</td><td>IANA name, e.g. <code>Asia/Jakarta</code>. Validated via <code>Intl.DateTimeFormat</code>.</td></tr>
+  </table>
+
+  <h4>Response</h4>
+  <ul class="compact"><li><code>204 No Content</code></li></ul>
+
+  <h4>Errors</h4>
+  <ul class="compact"><li><code>400 invalid_request</code> — out of range or unknown timezone.</li></ul>
+</section>
+
+<section id="appendix" class="endpoint anchor">
+  <h2>Appendix</h2>
+
+  <h3 class="schema-heading">Rate limits</h3>
+  <ul class="compact">
+    <li><code>POST /auth/login</code>: 5 failed requests per (ip + username) per 15 min.</li>
+    <li><code>POST /auth/refresh</code>: 5 failed requests per ip per 15 min.</li>
+    <li><code>POST /api/v1/presence</code>: 20 requests per learner per minute.</li>
+  </ul>
+
+  <h3 class="schema-heading">Nightly rollup</h3>
+  <p class="summary">A scheduled script (<code>npm run rollup</code>) writes yesterday's <code>ATTENDANCE_HISTORY</code> row per learner from <code>PRESENCE_LOG</code> + <code>SESSION_CONFIG</code>. Existing <code>leave</code> rows are preserved. The job is idempotent.</p>
+
+  <h3 class="schema-heading">Out of scope for v1</h3>
+  <ul class="compact">
+    <li>Explicit user-triggered check-in / check-out.</li>
+    <li>Leave request and approval flow.</li>
+    <li>Real IoT sensor readings.</li>
+    <li>Multi-timezone operation.</li>
+    <li>Real-time push (all endpoints polled).</li>
+    <li>Back-fill of historical attendance for pre-existing data.</li>
+    <li>Anti-spoofing of presence pings.</li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+</body>
+</html>
