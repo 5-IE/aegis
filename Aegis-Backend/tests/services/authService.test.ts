@@ -9,6 +9,20 @@ beforeAll(() => {
   process.env.DB_NAME = 'AEGIS';
 });
 
+// Fake connection returned by pool.getConnection() — supports transaction plumbing.
+const fakeConn = {
+  beginTransaction: vi.fn().mockResolvedValue(undefined),
+  commit: vi.fn().mockResolvedValue(undefined),
+  rollback: vi.fn().mockResolvedValue(undefined),
+  release: vi.fn(),
+};
+
+vi.mock('../../src/db/pool.js', () => ({
+  pool: {
+    getConnection: vi.fn().mockResolvedValue(fakeConn),
+  },
+}));
+
 vi.mock('../../src/db/queries/userQueries.js', () => ({
   findUserByUsername: vi.fn(),
   findUserById: vi.fn(),
@@ -20,6 +34,10 @@ vi.mock('../../src/db/queries/refreshTokenQueries.js', () => ({
   findRefreshTokenByHash: vi.fn(),
   revokeRefreshToken: vi.fn(),
   revokeAllRefreshTokensForUser: vi.fn(),
+  // Transaction-aware variants used by refresh()
+  findRefreshTokenByHashForUpdate: vi.fn(),
+  insertRefreshTokenTx: vi.fn(),
+  revokeRefreshTokenTx: vi.fn(),
 }));
 
 const load = async () => {
@@ -41,7 +59,13 @@ const learner = {
   session: 'AM' as const,
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Re-apply default happy-path behaviour for transaction plumbing after clearAllMocks.
+  fakeConn.beginTransaction.mockResolvedValue(undefined);
+  fakeConn.commit.mockResolvedValue(undefined);
+  fakeConn.rollback.mockResolvedValue(undefined);
+});
 
 describe('login', () => {
   it('returns tokens and user on valid credentials', async () => {
@@ -78,7 +102,7 @@ describe('refresh', () => {
     const { svc, tokens, users } = await load();
     const tokenSvc = await import('../../src/services/tokenService.js');
     const gen = tokenSvc.generateRefreshToken();
-    (tokens.findRefreshTokenByHash as any).mockResolvedValue({
+    const tokenRow = {
       id_token: 5,
       id_user: 42,
       token_hash: gen.hash,
@@ -86,14 +110,18 @@ describe('refresh', () => {
       revoked_at: null,
       replaced_by_id: null,
       created_at: new Date(),
-    });
+    };
+    // Pre-check (pool query) returns the valid row
+    (tokens.findRefreshTokenByHash as any).mockResolvedValue(tokenRow);
+    // SELECT FOR UPDATE inside the transaction also returns it
+    (tokens.findRefreshTokenByHashForUpdate as any).mockResolvedValue(tokenRow);
     (users.findUserById as any).mockResolvedValue(learner);
-    (tokens.insertRefreshToken as any).mockResolvedValue(6);
+    (tokens.insertRefreshTokenTx as any).mockResolvedValue(6);
 
     const result = await svc.refresh(gen.token);
     expect(result.accessToken).toBeTruthy();
     expect(result.refreshToken).not.toBe(gen.token);
-    expect(tokens.revokeRefreshToken).toHaveBeenCalledWith(5, 6);
+    expect(tokens.revokeRefreshTokenTx).toHaveBeenCalledWith(fakeConn, 5, 6);
   });
 
   it('cascade-revokes when a revoked token is reused', async () => {
@@ -123,7 +151,7 @@ describe('refresh', () => {
     const { svc, tokens } = await load();
     const tokenSvc = await import('../../src/services/tokenService.js');
     const gen = tokenSvc.generateRefreshToken();
-    (tokens.findRefreshTokenByHash as any).mockResolvedValue({
+    const expiredRow = {
       id_token: 5,
       id_user: 42,
       token_hash: gen.hash,
@@ -131,7 +159,11 @@ describe('refresh', () => {
       revoked_at: null,
       replaced_by_id: null,
       created_at: new Date(),
-    });
+    };
+    // Pre-check returns non-revoked so we enter the transaction path
+    (tokens.findRefreshTokenByHash as any).mockResolvedValue(expiredRow);
+    // FOR UPDATE inside transaction also returns the expired row
+    (tokens.findRefreshTokenByHashForUpdate as any).mockResolvedValue(expiredRow);
     await expect(svc.refresh(gen.token)).rejects.toMatchObject({ code: 'invalid_grant' });
   });
 });

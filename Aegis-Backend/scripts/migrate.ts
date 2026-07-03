@@ -64,6 +64,13 @@ async function main() {
   await ensureMigrationTable(conn);
   const already = await appliedFilenames(conn);
 
+  // On a fresh install, 0001_init was already applied by bootstrapConn above.
+  // Record it now so the main loop does not try to re-apply it.
+  if (!dbExists) {
+    await conn.query('INSERT IGNORE INTO `SCHEMA_MIGRATIONS` (filename) VALUES (?)', [files[0]]);
+    already.add(files[0]);
+  }
+
   for (const file of files) {
     if (already.has(file)) {
       logger.info({ file }, 'Skip (already applied)');
