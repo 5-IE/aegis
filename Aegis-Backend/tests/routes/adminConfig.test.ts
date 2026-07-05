@@ -65,6 +65,14 @@ describe('session-config', () => {
       .send({ start_time: '08:00:00', late_after: '08:15:00', end_time: '12:00:00' });
     expect(res.status).toBe(204);
   });
+
+  it('PUT /:session rejects unknown fields', async () => {
+    const { app, token } = await buildTestApp();
+    const res = await request(app).put('/api/v1/admin/session-config/AM')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ start_time: '08:00:00', late_after: '08:15:00', end_time: '12:00:00', extra: 'x' });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('system-config', () => {

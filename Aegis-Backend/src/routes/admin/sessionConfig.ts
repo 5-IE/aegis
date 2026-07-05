@@ -10,7 +10,7 @@ const bodySchema = z.object({
   start_time: z.string().regex(timePattern),
   late_after: z.string().regex(timePattern),
   end_time: z.string().regex(timePattern),
-});
+}).strict();
 const paramSchema = z.object({ session: z.enum(['AM', 'PM']) });
 
 export const sessionConfigRouter = Router();

@@ -29,20 +29,21 @@ export async function getOverview(
   const sys = await getSystemConfig();
   const { startUtc, endUtc } = localDayBoundsUtc(now, sys.timezone);
 
-  const [pings, leaveRows] = await Promise.all([
+  const date = localDateStr(now, sys.timezone);
+  const [pings, leaveEntries] = await Promise.all([
     firstAndLastPingBulk(learners.map((l) => l.id_user), startUtc, endUtc),
-    (async () => {
-      const date = localDateStr(now, sys.timezone);
-      return Promise.all(learners.map((l) => findByUserAndDate(l.id_user, date)));
-    })(),
+    Promise.all(
+      learners.map(async (l) => [l.id_user, await findByUserAndDate(l.id_user, date)] as const),
+    ),
   ]);
+  const leaves = new Map(leaveEntries);
 
   const list = await Promise.all(
-    learners.map(async (l, idx) => {
+    learners.map(async (l) => {
       const p = pings.get(l.id_user);
       const first = p?.first ?? null;
       const last = p?.last ?? null;
-      const hasLeave = leaveRows[idx]?.status === 'leave';
+      const hasLeave = leaves.get(l.id_user)?.status === 'leave';
       const status = await computeTodayStatus(l.session, now, first, last, hasLeave);
       return {
         name: displayName(l),
