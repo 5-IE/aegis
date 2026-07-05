@@ -132,6 +132,7 @@
       <li><a href="#dashboard"><span class="method m-GET">GET</span>/dashboard</a></li>
       <li><a href="#histories"><span class="method m-GET">GET</span>/histories</a></li>
       <li><a href="#presence"><span class="method m-POST">POST</span>/presence</a></li>
+      <li><a href="#beacons"><span class="method m-GET">GET</span>/beacons</a></li>
     </ul>
   </div>
 
@@ -139,7 +140,7 @@
     <div class="group-title">Admin · Dashboard</div>
     <ul>
       <li><a href="#absence-summary"><span class="method m-GET">GET</span>/absence-summary</a></li>
-      <li><a href="#overview"><span class="method m-GET">GET</span>/overview</a></li>
+      <li><a href="#admin-overview"><span class="method m-GET">GET</span>/overview</a></li>
     </ul>
   </div>
 
@@ -160,6 +161,7 @@
       <li><a href="#session-config-put"><span class="method m-PUT">PUT</span>/session-config/:session</a></li>
       <li><a href="#system-config"><span class="method m-GET">GET</span>/system-config</a></li>
       <li><a href="#system-config-put"><span class="method m-PUT">PUT</span>/system-config</a></li>
+      <li><a href="#admin-rollup"><span class="method m-POST">POST</span>/rollup</a></li>
     </ul>
   </div>
 </aside>
@@ -404,7 +406,7 @@
     <tr><td><code>"Checked In"</code></td><td>Ping received today; most recent ping within staleness window.</td></tr>
     <tr><td><code>"Checked Out"</code></td><td>Ping received today; session <code>end_time</code> has passed and last ping is older than the staleness window.</td></tr>
     <tr><td><code>"Not Checked Out"</code></td><td>Session ended, but a ping arrived within the staleness window (still detected).</td></tr>
-    <tr><td><code>"Off"</code></td><td>Today's <code>ATTENDANCE_HISTORY</code> row is <code>leave</code>, or the user has no active session assignment.</td></tr>
+    <tr><td><code>"Off"</code></td><td>Today's <code>ATTENDANCE_HISTORY</code> row is <code>leave</code>.</td></tr>
   </table>
 </section>
 
@@ -431,8 +433,8 @@
   <span class="k">"list"</span>: [
     {
       <span class="k">"date"</span>: <span class="s">"2026-07-01"</span>,
-      <span class="k">"checked_in_at"</span>: <span class="s">"2026-07-01T08:04:12Z"</span>,
-      <span class="k">"checked_out_at"</span>: <span class="s">"2026-07-01T11:58:41Z"</span>,
+      <span class="k">"checked_in_at"</span>: <span class="s">"2026-07-01T01:04:12Z"</span>,
+      <span class="k">"checked_out_at"</span>: <span class="s">"2026-07-01T04:58:41Z"</span>,
       <span class="k">"status"</span>: <span class="s">"early"</span>
     },
     {
@@ -463,19 +465,19 @@
     <code class="path">/api/v1/presence</code>
     <span class="auth auth-learner">learner</span>
   </div>
-  <p class="summary">Called by the iPhone app whenever it detects an iBeacon. The backend resolves the beacon to a room and writes a <code>PRESENCE_LOG</code> row.</p>
+  <p class="summary">Called by the iPhone app whenever it detects an iBeacon. The app resolves the beacon to a room via <code>GET /api/v1/beacons</code> (cached at startup), then posts the <code>room_id</code> here. The backend writes a <code>PRESENCE_LOG</code> row.</p>
 
-  <div class="callout">
-    Not in the original UI list, but the read endpoints have nothing to serve without it. This is the write path that populates <code>PRESENCE_LOG</code>.
+  <div class="callout info">
+    The iPhone app calls <code>GET /api/v1/beacons</code> at startup to cache beacon→room mappings, then sends <code>room_id</code> here on each detection.
   </div>
 
   <h4>Request body</h4>
   <table>
     <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
-    <tr><td><code>beacon_identifier</code></td><td>string</td><td>1–100 chars, matches <code>DEVICE.identifier</code>.</td></tr>
-    <tr><td class="opt"><code>position_x</code></td><td>float</td><td>Optional; forwarded to <code>PRESENCE_LOG.position_x</code>.</td></tr>
+    <tr><td><code>room_id</code></td><td>integer</td><td>Positive; must exist in <code>ROOM</code>. Client resolves beacon→room via <code>GET /api/v1/beacons</code> first.</td></tr>
+    <tr><td class="opt"><code>position_x</code></td><td>float</td><td>Optional.</td></tr>
     <tr><td class="opt"><code>position_y</code></td><td>float</td><td>Optional.</td></tr>
-    <tr><td class="opt"><code>battery_level</code></td><td>integer 0–100</td><td>Optional; phone battery %.</td></tr>
+    <tr><td class="opt"><code>battery_level</code></td><td>integer 0–100</td><td>Optional; phone battery percentage.</td></tr>
   </table>
 
   <h4>Response</h4>
@@ -483,8 +485,31 @@
 
   <h4>Errors</h4>
   <ul class="compact">
-    <li><code>400 invalid_request</code> — body malformed, or beacon unknown / unassigned to a room.</li>
+    <li><code>400 invalid_request</code> — body malformed, or <code>room_id</code> does not exist.</li>
     <li><code>429 too_many_requests</code> — hard cap 20 pings per learner per minute.</li>
+  </ul>
+</section>
+
+<section id="beacons" class="endpoint anchor">
+  <h2>List beacons</h2>
+  <div class="method-line">
+    <span class="method-badge m-GET">GET</span>
+    <code class="path">/api/v1/beacons</code>
+    <span class="auth auth-learner">any authenticated</span>
+  </div>
+  <p class="summary">Return the beacon→room mapping so clients (iPhone/Mac) can cache it locally and resolve iBeacon detections to <code>room_id</code> before calling <code>POST /api/v1/presence</code>. Excludes unassigned devices (rows where <code>DEVICE.id_room IS NULL</code>). Admins can also call this endpoint.</p>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"list"</span>: [
+    { <span class="k">"beacon_identifier"</span>: <span class="s">"1:2"</span>, <span class="k">"room_id"</span>: <span class="n">3</span>, <span class="k">"room_name"</span>: <span class="s">"Lab 3.02"</span> }
+  ]
+}</pre>
+
+  <h4>Errors</h4>
+  <ul class="compact">
+    <li><code>401 unauthorized</code></li>
+    <li><code>403 forbidden</code></li>
   </ul>
 </section>
 
@@ -512,7 +537,7 @@
 }</pre>
 </section>
 
-<section id="overview" class="endpoint anchor">
+<section id="admin-overview" class="endpoint anchor">
   <h2>Today overview</h2>
   <div class="method-line">
     <span class="method-badge m-GET">GET</span>
@@ -536,7 +561,7 @@
     {
       <span class="k">"name"</span>: <span class="s">"Alice Doe"</span>,
       <span class="k">"session"</span>: <span class="s">"AM"</span>,
-      <span class="k">"clocked_in_at"</span>: <span class="s">"2026-07-03T08:04:12Z"</span>,
+      <span class="k">"clocked_in_at"</span>: <span class="s">"2026-07-03T01:04:12Z"</span>,
       <span class="k">"clocked_out_at"</span>: <span class="k">null</span>,
       <span class="k">"status"</span>: <span class="s">"Checked In"</span>
     }
@@ -712,6 +737,36 @@
 
   <h4>Errors</h4>
   <ul class="compact"><li><code>400 invalid_request</code> — out of range or unknown timezone.</li></ul>
+</section>
+
+<section id="admin-rollup" class="endpoint anchor">
+  <h2>Trigger attendance rollup</h2>
+  <div class="method-line">
+    <span class="method-badge m-POST">POST</span>
+    <code class="path">/api/v1/admin/rollup</code>
+    <span class="auth auth-admin">admin</span>
+  </div>
+  <p class="summary">Manually run the attendance rollup that normally executes via <code>npm run rollup</code> in cron. Idempotent — existing <code>leave</code> rows are preserved. Synchronous; may take a while for large date ranges.</p>
+
+  <h4>Request body (all fields optional; strict schema — unknown keys rejected)</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
+    <tr><td class="opt"><code>date</code></td><td>string <code>YYYY-MM-DD</code></td><td>Optional. Defaults to yesterday in <code>SYSTEM_CONFIG.timezone</code>.</td></tr>
+    <tr><td class="opt"><code>user_id</code></td><td>integer positive</td><td>Optional. Defaults to all learners.</td></tr>
+  </table>
+
+  <h4>Response 200</h4>
+  <pre>{
+  <span class="k">"processed"</span>: <span class="n">60</span>,
+  <span class="k">"skipped_leave"</span>: <span class="n">2</span>
+}</pre>
+
+  <h4>Errors</h4>
+  <ul class="compact">
+    <li><code>400 invalid_request</code> — bad date format or unknown key in body.</li>
+    <li><code>401 unauthorized</code></li>
+    <li><code>403 forbidden</code></li>
+  </ul>
 </section>
 
 <section id="appendix" class="endpoint anchor">
