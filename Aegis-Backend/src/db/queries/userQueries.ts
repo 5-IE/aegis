@@ -53,3 +53,48 @@ export async function insertUser(input: {
   );
   return result.insertId;
 }
+
+export async function listLearners(
+  filter: { name?: string; session?: 'AM' | 'PM' },
+  page: number,
+  perPage: number,
+): Promise<{ list: UserRow[]; total: number }> {
+  const conds: string[] = [`\`role\` = 'learner'`];
+  const params: unknown[] = [];
+  if (filter.name !== undefined && filter.name !== '') {
+    conds.push(`TRIM(CONCAT_WS(' ', \`first_name\`, \`last_name\`)) LIKE ?`);
+    params.push(`%${filter.name}%`);
+  }
+  if (filter.session !== undefined) {
+    conds.push('`session` = ?');
+    params.push(filter.session);
+  }
+  const where = 'WHERE ' + conds.join(' AND ');
+
+  const [countRows] = await pool.query<({ c: number } & RowDataPacket)[]>(
+    `SELECT COUNT(*) AS c FROM \`USER\` ${where}`,
+    params,
+  );
+  const total = countRows[0]?.c ?? 0;
+
+  const offset = (page - 1) * perPage;
+  const [rows] = await pool.query<(UserRow & RowDataPacket)[]>(
+    `SELECT * FROM \`USER\` ${where} ORDER BY \`first_name\` ASC, \`last_name\` ASC LIMIT ? OFFSET ?`,
+    [...params, perPage, offset],
+  );
+  return { list: rows, total };
+}
+
+export async function listLearnerIds(): Promise<number[]> {
+  const [rows] = await pool.query<({ id_user: number } & RowDataPacket)[]>(
+    "SELECT `id_user` FROM `USER` WHERE `role` = 'learner'",
+  );
+  return rows.map((r) => r.id_user);
+}
+
+export async function countLearners(): Promise<number> {
+  const [rows] = await pool.query<({ c: number } & RowDataPacket)[]>(
+    "SELECT COUNT(*) AS c FROM `USER` WHERE `role` = 'learner'",
+  );
+  return rows[0]?.c ?? 0;
+}

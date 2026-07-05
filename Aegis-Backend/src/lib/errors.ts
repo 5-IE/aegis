@@ -4,6 +4,7 @@ export type ErrorCode =
   | 'invalid_grant'
   | 'unauthorized'
   | 'forbidden'
+  | 'not_found'
   | 'too_many_requests'
   | 'internal_error';
 
@@ -13,6 +14,7 @@ const STATUS: Record<ErrorCode, number> = {
   invalid_grant: 401,
   unauthorized: 401,
   forbidden: 403,
+  not_found: 404,
   too_many_requests: 429,
   internal_error: 500,
 };
@@ -23,6 +25,7 @@ const DEFAULT_MESSAGE: Record<ErrorCode, string> = {
   invalid_grant: 'The refresh token is invalid, expired, or already used',
   unauthorized: 'Authentication is required',
   forbidden: 'You do not have permission to access this resource',
+  not_found: 'The requested resource does not exist',
   too_many_requests: 'Too many requests — please try again later',
   internal_error: 'An unexpected error occurred',
 };
