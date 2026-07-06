@@ -1,4 +1,4 @@
-import { RowDataPacket } from 'mysql2';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { pool } from '../pool.js';
 
 export interface RoomRow {
@@ -19,4 +19,23 @@ export async function findRoomById(id: number): Promise<RoomRow | null> {
     [id],
   );
   return rows[0] ?? null;
+}
+
+export async function insertRoom(name: string): Promise<number> {
+  const [result] = await pool.query<ResultSetHeader>(
+    'INSERT INTO `ROOM` (`name`) VALUES (?)',
+    [name],
+  );
+  return result.insertId;
+}
+
+export async function updateRoomName(id: number, name: string): Promise<void> {
+  await pool.query(
+    'UPDATE `ROOM` SET `name` = ? WHERE `id_room` = ?',
+    [name, id],
+  );
+}
+
+export async function deleteRoom(id: number): Promise<void> {
+  await pool.query('DELETE FROM `ROOM` WHERE `id_room` = ?', [id]);
 }
