@@ -4,11 +4,10 @@ import Combine
 @MainActor
 class RegisterViewModel: ObservableObject {
     @Published var userId: String = ""
-    @Published var isLoading: Bool = false
     @Published var isRegistered: Bool = false
-    @Published var errorMessage: String? = nil
     
-    private let apiService = ApiService()
+    var isLoading: Bool = false
+    var errorMessage: String? = nil
     
     func registerDevice() {
 //        guard !userId.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -33,26 +32,7 @@ class RegisterViewModel: ObservableObject {
                     return
                 }
                 
-                // send to server via ApiService
-                do {
-                    let params = [
-                        "userId": userId,
-                        "publicKeyBase64": publicKeyBase64
-                    ]
-                    let response = try await apiService.registerDevice(params: params)
-                    
-                    if response.message == "SUCCESS" {
-                        await MainActor.run {
-                            self.isRegistered = true
-                            self.isLoading = false
-                        }
-                    } else {
-                        errorMessage = response.message
-                    }
-                } catch {
-                    self.errorMessage = error.localizedDescription
-                    self.isLoading = false
-                }
+                print(publicKeyBase64)
             }
         }
     }

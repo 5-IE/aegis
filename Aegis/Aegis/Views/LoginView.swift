@@ -1,9 +1,15 @@
+//
+//  LoginView.swift
+//  Aegis
+//
+//  Created by Steve Agustinus on 06/07/26.
+//
+
 import SwiftUI
 
 struct LoginView: View {
-    @State private var email: String = ""
-    @State private var password: String = ""
-    @Binding var isLoggedIn: Bool
+    @Environment(DataStore.self) private var dataStore
+    @StateObject var viewModel = LoginViewModel()
 
     var body: some View {
         ZStack {
@@ -36,8 +42,8 @@ struct LoginView: View {
                             .foregroundColor(Theme.textSecondary)
                     }
 
-                    IconTextField(icon: "envelope", placeholder: "Enter your email or phone", text: $email)
-                    IconTextField(icon: "lock", placeholder: "Enter your password", text: $password, isSecure: true)
+                    IconTextField(icon: "envelope", placeholder: "Enter your email or phone", text: $viewModel.username)
+                    IconTextField(icon: "lock", placeholder: "Enter your password", text: $viewModel.password, isSecure: true)
 
                     HStack {
                         Spacer()
@@ -47,7 +53,12 @@ struct LoginView: View {
                     }
 
                     PrimaryButton(title: "SIGN IN") {
-                        isLoggedIn = true
+                        Task {
+                            let success = await viewModel.login(store: dataStore)
+                            if success {
+                                dataStore.isLoggedIn = true
+                            }
+                        }
                     }
                     .padding(.top, 4)
 
@@ -74,5 +85,5 @@ struct LoginView: View {
 }
 
 #Preview {
-    LoginView(isLoggedIn: .constant(false))
+    LoginView()
 }

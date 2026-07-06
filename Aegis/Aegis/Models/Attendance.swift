@@ -1,6 +1,59 @@
+//
+//  AttendanceData.swift
+//  Aegis
+//
+//  Created by Steve Agustinus on 07/07/26.
+//
+
+import Foundation
 import SwiftUI
 
-// MARK: - Attendance Status
+struct Attendance: Identifiable {
+    var id: String { date }
+    
+    let date: String
+    let checkedInAt: Date?
+    let checkedOutAt: Date?
+    let timeRangeLabel: String
+    let status: AttendanceStatus
+}
+
+extension Attendance {
+    init(from apiModel: AttendanceData) {
+        let inputFormatter = DateFormatter()
+        inputFormatter.dateFormat = "yyyy-MM-dd"
+        inputFormatter.locale = Locale(identifier: "en_US_POSIX")
+        
+        let outputFormatter = DateFormatter()
+        outputFormatter.dateFormat = "E, d MMM yyyy"
+        outputFormatter.locale = Locale(identifier: "en_US_POSIX")
+        
+        if let date = inputFormatter.date(from: apiModel.date) {
+            self.date = outputFormatter.string(from: date)
+        } else {
+            self.date = ""
+        }
+        
+        self.checkedInAt = apiModel.checkedInAt
+        self.checkedOutAt = apiModel.checkedOutAt
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "hh:mm a"
+        timeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        if let checkedInAt, let checkedOutAt {
+            self.timeRangeLabel = "\(timeFormatter.string(from: checkedInAt)) - \(timeFormatter.string(from: checkedOutAt))"
+        } else {
+            self.timeRangeLabel = "-"
+        }
+
+        switch (apiModel.status) {
+        case "early": self.status = .onTime
+        case "late": self.status = .late
+        case "leave": self.status = .leave
+        default: self.status = .leave
+        }
+    }
+}
+
 enum AttendanceStatus: String {
     case onTime = "On-time"
     case late = "Late"
@@ -21,14 +74,6 @@ enum AttendanceStatus: String {
         case .leave: return Theme.leaveBackground
         }
     }
-}
-
-// MARK: - Attendance Record
-struct AttendanceRecord: Identifiable {
-    let id = UUID()
-    let dateLabel: String   // e.g. "Fri, 26 Jun 2026"
-    let timeRange: String   // e.g. "12:30PM - 17:15PM"
-    let status: AttendanceStatus
 }
 
 // MARK: - Today's Attendance Status
@@ -122,31 +167,4 @@ enum TodayAttendanceStatus: Identifiable {
         case .runningLate: return "13"
         }
     }
-}
-
-// MARK: - Sample Data
-enum SampleData {
-    static let todayAttendanceOptions: [TodayAttendanceStatus] = [
-        .checkedIn(time: "12:55PM"),
-        .runningLate(time: "13:05PM"),
-        .notCheckedIn,
-        .onLeave
-    ]
-
-    static let recentAttendance: [AttendanceRecord] = [
-        AttendanceRecord(dateLabel: "Fri, 26 Jun 2026", timeRange: "12:30PM - 17:15PM", status: .onTime),
-        AttendanceRecord(dateLabel: "Thu, 25 Jun 2026", timeRange: "12:55PM - 17:00PM", status: .onTime),
-        AttendanceRecord(dateLabel: "Wed, 24 Jun 2026", timeRange: "13:05PM - 17:15PM", status: .late),
-        AttendanceRecord(dateLabel: "Tue, 23 Jun 2026", timeRange: "12:50PM - 17:10PM", status: .onTime),
-        AttendanceRecord(dateLabel: "Mon, 22 Jun 2026", timeRange: "-", status: .leave)
-    ]
-
-    static let juneHistory: [AttendanceRecord] = recentAttendance + [
-        AttendanceRecord(dateLabel: "Fri, 19 Jun 2026", timeRange: "12:30PM - 17:15PM", status: .onTime),
-        AttendanceRecord(dateLabel: "Thu, 18 Jun 2026", timeRange: "12:55PM - 17:00PM", status: .onTime),
-        AttendanceRecord(dateLabel: "Wed, 17 Jun 2026", timeRange: "13:05PM - 17:15PM", status: .late),
-        AttendanceRecord(dateLabel: "Tue, 16 Jun 2026", timeRange: "12:50PM - 17:10PM", status: .onTime),
-        AttendanceRecord(dateLabel: "Mon, 15 Jun 2026", timeRange: "12:55PM - 17:00PM", status: .onTime),
-        AttendanceRecord(dateLabel: "Fri, 12 Jun 2026", timeRange: "12:30PM - 17:15PM", status: .onTime)
-    ]
 }

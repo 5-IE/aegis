@@ -9,25 +9,67 @@ import Foundation
 import SwiftUI
 
 
-struct ApiResponse<T: Codable>: Codable {
-    let message: String?
-    let data: T?
-}
+struct EmptyResponse: Codable {}
 
 struct ApiError: Error {
+    let error: String?
     let message: String?
 }
 
-struct LoginData: Codable {
-    let idUser: Int
-    let name: String
-    let userType: Int
-    let key: String
+struct ListResponse<T: Codable>: Codable {
+    let list: T
+    let page: Int?
+    let perPage: Int?
+    let total: Int?
     
     enum CodingKeys: String, CodingKey {
-        case idUser = "id_user"
-        case name = "name"
-        case userType = "user_type"
-        case key = "key"
+        case list
+        case page
+        case perPage = "per_page"
+        case total
+    }
+}
+
+struct AuthResponse: Codable {
+    let accessToken: String
+    let refreshToken: String
+    let expiresIn: Int
+    let user: User
+    
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case refreshToken = "refresh_token"
+        case expiresIn = "expires_in"
+        case user
+    }
+}
+
+struct DashboardData: Codable {
+    let totalAttendance: Int
+    let totalLate: Int
+    let leaveTaken: Int
+    let todayStatus: String
+    let checkedInAt: Date?
+    
+    enum CodingKeys: String, CodingKey {
+        case totalAttendance = "total_attendance"
+        case totalLate = "total_late"
+        case leaveTaken = "leave_taken"
+        case todayStatus = "today_status"
+        case checkedInAt = "checked_in_at"
+    }
+}
+
+struct AttendanceData: Codable {
+    let date: String
+    let checkedInAt: Date?
+    let checkedOutAt: Date?
+    let status: String
+    
+    enum CodingKeys: String, CodingKey {
+        case date
+        case checkedInAt = "checked_in_at"
+        case checkedOutAt = "checked_out_at"
+        case status
     }
 }

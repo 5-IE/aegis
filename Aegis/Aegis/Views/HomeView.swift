@@ -1,12 +1,20 @@
 import SwiftUI
 
 struct HomeView: View {
-    let userName: String = "Dhita"
-    let todayLabel: String = "Mon, 29 Jun 2026"
-    let checkedInTime: String = "12:55PM"
+    @Environment(DataStore.self) private var dataStore
+    @StateObject var viewModel = HomeViewModel()
 
     var body: some View {
         ZStack(alignment: .top) {
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.red.opacity(0.8).cornerRadius(8))
+            }
+            
             Theme.screenBackground
                 .ignoresSafeArea()
 
@@ -28,10 +36,10 @@ struct HomeView: View {
                                     .foregroundColor(.white)
                             )
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Hi, \(userName)!")
+                            Text("Hi, \(viewModel.currentUser?.firstName ?? "first_name")")
                                 .font(Theme.Fonts.h1)
                                 .foregroundColor(Theme.textPrimary)
-                            Text(todayLabel)
+                            Text(viewModel.todayLabel)
                                 .font(Theme.Fonts.b2)
                                 .foregroundColor(Theme.primaryDark)
                         }
@@ -40,11 +48,11 @@ struct HomeView: View {
 
                     // Stat cards
                     HStack(spacing: 0) {
-                        StatCard(value: "84", label: "Total Attendance", icon: "person.2.fill")
+                        StatCard(value: viewModel.totalAttendance, label: "Total Attendance", icon: "person.2.fill")
                         Divider().frame(height: 54)
-                        StatCard(value: "02", label: "Total Late", icon: "clock.badge.exclamationmark.fill")
+                        StatCard(value: viewModel.totalLate, label: "Total Late", icon: "clock.badge.exclamationmark.fill")
                         Divider().frame(height: 54)
-                        StatCard(value: "01", label: "Leave Taken", icon: "calendar.badge.minus")
+                        StatCard(value: viewModel.leaveTaken, label: "Leave Taken", icon: "calendar.badge.minus")
                     }
                     .background(Theme.cardBackground)
                     .cornerRadius(10)
@@ -56,7 +64,7 @@ struct HomeView: View {
                             .font(Theme.Fonts.h2)
                             .foregroundColor(Theme.textPrimary)
 
-                        TodayAttendanceCard(status: .checkedIn(time: checkedInTime))
+                        TodayAttendanceCard(status: .checkedIn(time: viewModel.checkedInAt))
                     }
 
                     // Attendance History (recent)
@@ -84,9 +92,9 @@ struct HomeView: View {
                         }
 
                         VStack(spacing: 4) {
-                            ForEach(Array(SampleData.recentAttendance.enumerated()), id: \.element.id) { index, record in
+                            ForEach(Array(viewModel.attendanceHistory.enumerated()), id: \.element.date) { index, record in
                                 AttendanceRow(record: record)
-                                if index < SampleData.recentAttendance.count - 1 {
+                                if index < viewModel.attendanceHistory.count - 1 {
                                     Divider()
                                 }
                             }
@@ -104,6 +112,13 @@ struct HomeView: View {
             }
         }
         .navigationBarHidden(true)
+        .task {
+            if viewModel.currentUser == nil {
+                await viewModel.fetchDashboardData(store: dataStore)
+                await viewModel.fetchProfile(store: dataStore)
+                await viewModel.fetchAttendanceHistoryData(store: dataStore)
+            }
+        }
     }
 }
 

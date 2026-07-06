@@ -54,14 +54,14 @@ struct AttendanceHistoryView: View {
             // List
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(Array(SampleData.juneHistory.enumerated()), id: \.element.id) { index, record in
-                        AttendanceRow(record: record)
-                            .padding(.horizontal, 22)
-
-                        if index < SampleData.juneHistory.count - 1 {
-                            Divider()
-                        }
-                    }
+//                    ForEach(Array(SampleData.juneHistory.enumerated()), id: \.element.id) { index, record in
+//                        AttendanceRow(record: record)
+//                            .padding(.horizontal, 22)
+//
+//                        if index < SampleData.juneHistory.count - 1 {
+//                            Divider()
+//                        }
+//                    }
                 }
 
                 .padding(.vertical, 10)

@@ -57,15 +57,15 @@ struct StatCard: View {
 
 // MARK: - Attendance Row (used in both Home and Attendance History lists)
 struct AttendanceRow: View {
-    let record: AttendanceRecord
+    let record: Attendance
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 8) {
-                Text(record.dateLabel)
+                Text(record.date)
                     .font(Theme.Fonts.b1)
                     .foregroundColor(Theme.textPrimary)
-                Text(record.timeRange)
+                Text(record.timeRangeLabel)
                     .font(Theme.Fonts.b2)
                     .foregroundColor(Theme.textSecondary)
             }
@@ -236,10 +236,3 @@ struct IconTextField: View {
     }
 }
 
-#Preview("Today's Attendance States") {
-    ScrollView {
-        TodayAttendanceGrid(statuses: SampleData.todayAttendanceOptions)
-            .padding(20)
-    }
-    .background(Theme.screenBackground)
-}

@@ -15,8 +15,8 @@ class HttpService {
     private func getHeaders(isFormData: Bool = false) -> [String: String] {
         var headers: [String: String] = [:]
         
-        if let token = UserDefaults.standard.string(forKey: "eltar-session-key") {
-            headers["Authorization"] = token
+        if let token = UserDefaults.standard.string(forKey: "aegis-access-token") {
+            headers["Authorization"] = "Bearer " + token
         }
         
         if !isFormData {
@@ -32,7 +32,7 @@ class HttpService {
         endpoint: String,
         params: [String: Any]? = nil,
         queryParams: [String: String]? = nil
-    ) async throws -> ApiResponse<T> {
+    ) async throws -> T {
         var urlComponents = URLComponents(string: baseURL + endpoint)!
         if let queryParams = queryParams {
             urlComponents.queryItems = queryParams.map { URLQueryItem(name: $0.key, value: $0.value) }
@@ -50,20 +50,38 @@ class HttpService {
             request.httpBody = try? JSONSerialization.data(withJSONObject: params)
         }
         
-        let (data, _) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
         
-        do {
-            let decoder = JSONDecoder()
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ApiError(error: "internal_server_error", message: "Invalid response from server.")
+        }
+        
+        let decoder = JSONDecoder()
+        let isoStyle = Date.ISO8601FormatStyle()
+        
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
             
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            decoder.dateDecodingStrategy = .formatted(formatter)
+            if let date =  try? Date(dateString, strategy: isoStyle) {
+                return date
+            }
             
-            return try decoder.decode(ApiResponse<T>.self, from: data)
-        } catch {
-            print(error)
-            throw ApiError(message: "Decoding failed or server error")
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string: \(dateString)")
+        }
+        if (200...299).contains(httpResponse.statusCode) {
+            do {
+                return try decoder.decode(T.self, from: data)
+            } catch {
+                print("Decoding error: \(error)")
+                throw ApiError(error: "internal_server_error", message: "Failed to parse data from server")
+            }
+        } else {
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                throw ApiError(error: errorJson["error"] as? String, message: errorJson["message"] as? String)
+            } else {
+                throw ApiError(error: "internal_server_error", message: "Server error: \(httpResponse.statusCode)")
+            }
         }
     }
 }

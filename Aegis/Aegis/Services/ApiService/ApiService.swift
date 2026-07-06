@@ -5,32 +5,42 @@
 //  Created by Steve Agustinus on 21/03/26.
 //
 
-
-class ApiService: HttpService {
-    
-    // Auth (example)
-//    func login(params: [String: Any]) async throws -> ApiResponse<LoginData> {
-//        try await request("POST", endpoint: "/login", params: params)
-//    }
-    func registerDevice(params: [String: Any]) async throws -> ApiResponse<EmptyResponse> {
-            try await request("POST", endpoint: "/register-device", params: params)
-        }
-    
-    
-    // Transactions (example only)
-//    func getTransaction(params: [String: String]) async throws -> ApiResponse<[Transaction]> {
-//        try await request("GET", endpoint: "/transaction", queryParams: params)
-//    }
-//    func addTransaction(params: [String: Any]) async throws -> ApiResponse<EmptyResponse> {
-//        try await request("POST", endpoint: "/transaction", params: params)
-//    }
-//    func editTransaction(params: [String: Any]) async throws -> ApiResponse<EmptyResponse> {
-//        try await request("PATCH", endpoint: "/transaction", params: params)
-//    }
-//    func addTransferTransaction(params: [String: Any]) async throws -> ApiResponse<EmptyResponse> {
-//        try await request("POST", endpoint: "/transfer_transaction", params: params)
-//    }
+protocol ApiServiceProtocol {
+    func login(username: String, password: String) async throws -> AuthResponse
+    func registerDevice(publicKey: String) async throws -> EmptyResponse
+    func fetchProfile() async throws -> User
+    func fetchDashboard() async throws -> DashboardData
+    func fetchAttendanceHistory(month: Int?, year: Int?, page: Int?, perPage: Int?) async throws -> ListResponse<[AttendanceData]>
 }
 
-// Dummy struct for 204 No Content or empty data
-struct EmptyResponse: Codable {}
+extension ApiServiceProtocol {
+    func fetchAttendanceHistory(month: Int? = nil, year: Int? = nil, page: Int? = nil, perPage: Int? = nil) async throws -> ListResponse<[AttendanceData]> {
+        return try await fetchAttendanceHistory(month: month, year: year, page: page, perPage: perPage)
+    }
+}
+
+class ApiService: HttpService, ApiServiceProtocol {
+    
+    func login(username: String, password: String) async throws -> AuthResponse {
+        let params = ["username": username, "password": password]
+        return try await request("POST", endpoint: "/auth/login", params: params)
+    }
+    func registerDevice(publicKey: String) async throws -> EmptyResponse {
+        let params = ["device_public_key": publicKey]
+        return try await request("POST", endpoint: "/api/v1/register-device", params: params)
+    }
+    func fetchProfile() async throws -> User {
+        return try await request("GET", endpoint: "/api/v1/me")
+    }
+    func fetchDashboard() async throws -> DashboardData {
+        return try await request("GET", endpoint: "/api/v1/dashboard")
+    }
+    func fetchAttendanceHistory(month: Int?, year: Int?, page: Int?, perPage: Int?) async throws -> ListResponse<[AttendanceData]> {
+        var params: [String: String] = [:]
+        if let month { params["month"] = String(month) }
+        if let year { params["year"] = String(year) }
+        if let page { params["page"] = String(page) }
+        if let perPage { params["per_page"] = String(perPage) }
+        return try await request("GET", endpoint: "/api/v1/histories", queryParams: params)
+    }
+}

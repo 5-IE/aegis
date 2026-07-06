@@ -1,7 +1,6 @@
 //
 //  AppEnvironment.swift
 //  Aegis
-//  test
 //
 //  Created by Steve Agustinus on 03/07/26.
 //
@@ -18,9 +17,9 @@ enum AppEnvironment {
     var baseURL: String {
         switch self {
         case .development:
-            return "http://192.168.1.10:3000"
+            return "http://192.168.110.168:3000"
         case .production:
-            return "http://10.60.57.161:3000"
+            return "http://10.64.50.204:3000"
         }
     }
 }
