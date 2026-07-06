@@ -180,6 +180,22 @@ describe('POST /api/v1/admin/beacons', () => {
       .send({ name: 'x' });
     expect(res.status).toBe(400);
   });
+
+  it('accepts create without room_id (defaults to null unassigned)', async () => {
+    const { app, token } = await buildTestApp();
+    const svc = await import('../../src/services/beaconsService.js');
+    (svc.createBeaconService as any).mockResolvedValue({ id: 3, name: 'Spare2', beacon_identifier: '1:8888', room_id: null, room_name: null });
+    const res = await request(app)
+      .post('/api/v1/admin/beacons')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Spare2', beacon_identifier: '1:8888' });
+    expect(res.status).toBe(201);
+    expect(svc.createBeaconService).toHaveBeenCalledWith({
+      name: 'Spare2',
+      beacon_identifier: '1:8888',
+      room_id: null,
+    });
+  });
 });
 
 describe('PATCH /api/v1/admin/beacons/:device_id', () => {

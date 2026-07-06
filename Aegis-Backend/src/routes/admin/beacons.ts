@@ -26,7 +26,7 @@ const listQuerySchema = z.object({
 const createBodySchema = z.object({
   name: z.string().min(1).max(100),
   beacon_identifier: z.string().min(1).max(100),
-  room_id: z.number().int().positive().nullable(),
+  room_id: z.number().int().positive().nullable().optional(),
 }).strict();
 
 const patchBodySchema = z.object({
@@ -68,7 +68,10 @@ beaconsAdminRouter.post('/', requireAuth, requireRole('admin'), async (req, res,
   const parsed = createBodySchema.safeParse(req.body);
   if (!parsed.success) return next(new AppError('invalid_request'));
   try {
-    const beacon = await createBeaconService(parsed.data);
+    const beacon = await createBeaconService({
+      ...parsed.data,
+      room_id: parsed.data.room_id ?? null,
+    });
     res.status(201).json(beacon);
   } catch (err) {
     next(err);
