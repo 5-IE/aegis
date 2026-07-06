@@ -1,0 +1,485 @@
+{
+  "info": {
+    "name": "Aegis API",
+    "description": "Complete Postman collection for the Aegis backend.\n\n**Setup:**\n1. Import this collection into Postman.\n2. Duplicate the collection variables into a Postman Environment if you want to switch between local/staging/prod.\n3. Set `base_url` (default: http://localhost:3000).\n4. Run **Auth > Login** first — it stores `access_token` and `refresh_token` automatically via a test script. Every subsequent request uses `{{access_token}}`.\n5. When you hit a 401, run **Auth > Refresh** — it rotates and saves the new pair.\n\n**Groups:**\n- Health (public)\n- Auth (public)\n- Learner (learner token)\n- Beacons (any authenticated user)\n- Admin — Dashboard, Live Radar, Config, Rollup (admin token)\n- Admin — Users (admin token) — pending spec at Aegis-Backend/docs/superpowers/specs/2026-07-06-user-crud-design.md; endpoints will 404 until implemented.\n\n**Field naming:** all bodies and responses use snake_case.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "aegis-api-collection"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
+    { "key": "admin_username", "value": "admin", "type": "string" },
+    { "key": "admin_password", "value": "changeme", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "refresh_token", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('access_token', body.access_token);",
+                  "  pm.collectionVariables.set('refresh_token', body.refresh_token);",
+                  "  console.log('Saved access_token and refresh_token');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{admin_username}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "POST /auth/refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('access_token', body.access_token);",
+                  "  pm.collectionVariables.set('refresh_token', body.refresh_token);",
+                  "  console.log('Rotated tokens; both saved');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/auth/refresh", "host": ["{{base_url}}"], "path": ["auth", "refresh"] }
+          }
+        },
+        {
+          "name": "POST /auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/auth/logout", "host": ["{{base_url}}"], "path": ["auth", "logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Learner",
+      "item": [
+        {
+          "name": "GET /api/v1/me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/me", "host": ["{{base_url}}"], "path": ["api", "v1", "me"] }
+          }
+        },
+        {
+          "name": "GET /api/v1/dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/dashboard", "host": ["{{base_url}}"], "path": ["api", "v1", "dashboard"] }
+          }
+        },
+        {
+          "name": "GET /api/v1/histories",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/histories?page=1&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "histories"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "20" },
+                { "key": "month", "value": "7", "disabled": true, "description": "requires year" },
+                { "key": "year", "value": "2026", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/presence",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"room_id\": 1,\n  \"position_x\": 4.2,\n  \"position_y\": 7.1,\n  \"battery_level\": 78\n}"
+            },
+            "url": { "raw": "{{base_url}}/api/v1/presence", "host": ["{{base_url}}"], "path": ["api", "v1", "presence"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Beacons",
+      "item": [
+        {
+          "name": "GET /api/v1/beacons",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/beacons", "host": ["{{base_url}}"], "path": ["api", "v1", "beacons"] },
+            "description": "Any authenticated user (learner OR admin). Returns beacon→room mapping so clients cache locally before POST /presence."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin — Dashboard",
+      "item": [
+        {
+          "name": "GET /api/v1/admin/absence-summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/absence-summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "absence-summary"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/overview",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/overview?page=1&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "overview"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "20" },
+                { "key": "name", "value": "alice", "disabled": true },
+                { "key": "session", "value": "AM", "disabled": true, "description": "AM or PM" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin — Live Radar",
+      "item": [
+        {
+          "name": "GET /api/v1/admin/rooms",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/rooms",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "rooms"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/rooms/:room_id/map",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/rooms/1/map",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "rooms", "1", "map"],
+              "variable": [{ "key": "room_id", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/rooms/:room_id/current-occupants",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/rooms/1/current-occupants",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "rooms", "1", "current-occupants"],
+              "variable": [{ "key": "room_id", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/rooms/:room_id/additional-data",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/rooms/1/additional-data",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "rooms", "1", "additional-data"],
+              "variable": [{ "key": "room_id", "value": "1" }]
+            },
+            "description": "Mocked in v1: temperature and humidity return fixed values; people_in_room is live."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin — Config",
+      "item": [
+        {
+          "name": "GET /api/v1/admin/session-config",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/session-config",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "session-config"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/v1/admin/session-config/:session",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_time\": \"08:00:00\",\n  \"late_after\": \"08:15:00\",\n  \"end_time\": \"12:00:00\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/session-config/AM",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "session-config", "AM"],
+              "variable": [{ "key": "session", "value": "AM", "description": "AM or PM" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/system-config",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/system-config",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "system-config"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/v1/admin/system-config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"presence_staleness_minutes\": 5,\n  \"timezone\": \"Asia/Jakarta\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/system-config",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "system-config"]
+            },
+            "description": "Partial update: send only the fields you want to change. Strict schema — unknown keys return 400."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin — Rollup",
+      "item": [
+        {
+          "name": "POST /api/v1/admin/rollup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/rollup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "rollup"]
+            },
+            "description": "Body is optional. Default: rollup yesterday for all learners.\n\nExamples:\n- {} → yesterday, all learners\n- {\"date\": \"2026-07-04\"} → that date, all learners\n- {\"user_id\": 42} → yesterday, one learner\n- {\"date\": \"2026-07-04\", \"user_id\": 42} → both\n\nStrict schema: unknown keys return 400."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin — Users (spec pending — endpoints will 404 until implemented)",
+      "item": [
+        {
+          "name": "GET /api/v1/admin/users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users?page=1&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "20" },
+                { "key": "role", "value": "learner", "disabled": true, "description": "admin or learner" },
+                { "key": "session", "value": "AM", "disabled": true, "description": "AM or PM" },
+                { "key": "name", "value": "alice", "disabled": true },
+                { "key": "include_inactive", "value": "false", "disabled": true, "description": "true to include soft-deleted users" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/users/:id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users", "1"],
+              "variable": [{ "key": "id", "value": "1" }]
+            },
+            "description": "Returns the user regardless of is_active state."
+          }
+        },
+        {
+          "name": "POST /api/v1/admin/users",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"hunter2\",\n  \"email\": \"alice@example.com\",\n  \"role\": \"learner\",\n  \"session\": \"AM\",\n  \"first_name\": \"Alice\",\n  \"last_name\": \"Doe\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users"]
+            },
+            "description": "session is required when role=learner; ignored when role=admin. 409 conflict on duplicate username or duplicate email (among active users)."
+          }
+        },
+        {
+          "name": "PATCH /api/v1/admin/users/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new@example.com\",\n  \"first_name\": \"Alice\",\n  \"last_name\": \"Smith\",\n  \"session\": \"PM\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users", "1"],
+              "variable": [{ "key": "id", "value": "1" }]
+            },
+            "description": "Partial update. Cannot change username (delete + recreate) or password (use /password endpoint) or is_active (use DELETE / reactivate)."
+          }
+        },
+        {
+          "name": "PUT /api/v1/admin/users/:id/password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_password\": \"changeme\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/1/password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users", "1", "password"],
+              "variable": [{ "key": "id", "value": "1" }]
+            },
+            "description": "Resets the target user's password and revokes all their refresh tokens. Admin's own tokens unaffected."
+          }
+        },
+        {
+          "name": "DELETE /api/v1/admin/users/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users", "1"],
+              "variable": [{ "key": "id", "value": "1" }]
+            },
+            "description": "Soft delete: sets is_active=FALSE and revokes refresh tokens. 400 if self-delete or last-admin-delete."
+          }
+        },
+        {
+          "name": "POST /api/v1/admin/users/:id/reactivate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/1/reactivate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users", "1", "reactivate"],
+              "variable": [{ "key": "id", "value": "1" }]
+            },
+            "description": "Sets is_active=TRUE. Idempotent. 204 on success, 404 if user missing."
+          }
+        }
+      ]
+    }
+  ]
+}
