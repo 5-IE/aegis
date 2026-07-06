@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'unauthorized'
   | 'forbidden'
   | 'not_found'
+  | 'conflict'
   | 'too_many_requests'
   | 'internal_error';
 
@@ -15,6 +16,7 @@ const STATUS: Record<ErrorCode, number> = {
   unauthorized: 401,
   forbidden: 403,
   not_found: 404,
+  conflict: 409,
   too_many_requests: 429,
   internal_error: 500,
 };
@@ -26,6 +28,7 @@ const DEFAULT_MESSAGE: Record<ErrorCode, string> = {
   unauthorized: 'Authentication is required',
   forbidden: 'You do not have permission to access this resource',
   not_found: 'The requested resource does not exist',
+  conflict: 'The resource already exists',
   too_many_requests: 'Too many requests — please try again later',
   internal_error: 'An unexpected error occurred',
 };
