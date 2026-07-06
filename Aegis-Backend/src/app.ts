@@ -11,6 +11,7 @@ import { adminRoomsRouter } from './routes/admin/rooms.js';
 import { sessionConfigRouter } from './routes/admin/sessionConfig.js';
 import { systemConfigRouter } from './routes/admin/systemConfig.js';
 import { rollupRouter } from './routes/admin/rollup.js';
+import { usersRouter } from './routes/admin/users.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 export function buildApp(): express.Express {
@@ -36,6 +37,7 @@ export function buildApp(): express.Express {
   app.use('/api/v1/admin/session-config', sessionConfigRouter);
   app.use('/api/v1/admin/system-config', systemConfigRouter);
   app.use('/api/v1/admin/rollup', rollupRouter);
+  app.use('/api/v1/admin/users', usersRouter);
 
   app.use(errorHandler);
   return app;
