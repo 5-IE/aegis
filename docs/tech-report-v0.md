@@ -42,20 +42,19 @@ Because:
 - Nightly rollup script (`npm run rollup`) that aggregates raw presence pings into `ATTENDANCE_HISTORY` with `early / late / absent / leave` status per learner per day.
 - Migration runner and seed script; docker-compose file so any dev can spin up MySQL with one command.
 - GitHub Actions CI running lint + type-check + tests on every PR touching the backend.
+- Flashed an ESP32-C3 to emit standard iBeacon UUID/Major/Minor packets using Arduino C++.
 
 **What we discovered that we didn't expect:**
 - The iBeacon protocol has **no** signing or secret in the broadcast. Anyone with the major/minor pair can spoof a beacon. This kills any "prove-you-were-here-with-hardware" story unless we buy custom hardware. Documented as a v1 limitation.
+- Raw RSSI data is violently noisy. Multipath interference from desks and walls causes the signal to bounce, making simple distance calculations jump erratically.
+- We cannot rely on distance alone; we have to implement a Non-Linear Least Squares algorithm on the iPhone to calculate an intersecting X/Y coordinate.
 - Deleting PKCE: one HTML page, two tables, a cleanup cron, redirect handling on both apps, without giving up a single security property.
 
 ---
 
 ## What We Tried and Dropped
-
-**We considered:**
-[TODO]
-
-**We dropped it because:**
-[TODO]
+- The exact positioning requires at least three beacons positioned per room. The single beacon broadcasting data can not be used to define learner's (x, y) location. We switch to trilateration approach.
+- We tried to implement UUID rotation for the beacons, turns out multiple beacons detection using CoreLocation must have identical UUID. We decided to rotate the major/minor value instead to prevent beacon replication.
 
 ---
 
@@ -80,7 +79,7 @@ The iBeacon protocol (Apple's proximity beacon layer over Bluetooth LE) has no c
 
 
 **What changed since Section 1, and why:**
-[TODO]
+Everything shifted from Cloud to Edge/Local. We abandoned simple "Room Presence" for exact X/Y coordinate trilateration because edge computing on modern iPhones is powerful enough to handle the math locally without needing a cloud server to process it.
 
 ---
 
@@ -90,14 +89,12 @@ The iBeacon protocol (Apple's proximity beacon layer over Bluetooth LE) has no c
 
 *Does your use case genuinely need both frameworks working together, or could it work with just your main one?*
 
-[TODO]
-
-[[FILL IN: does the second framework actually earn its place, or would the product still work without it? Be honest — the template rewards honesty over completeness.]]
+Both the CoreLocation and Network framework are required for our system. CoreLocation framework is used to define where the learner location is. The Network framework is used to do API calls, sending location data to the local server inside the network.
 
 ### About Accessibility and Localization
 
-[TODO] *What did you decide to support, what did you decide not to, and why? "We didn't localize" is a fine answer if you can say why, "we didn't think about it" is not.*
-[ ]
+*What did you decide to support, what did you decide not to, and why? "We didn't localize" is a fine answer if you can say why, "we didn't think about it" is not.*
+We decided not to localize the app beyond English for the MVP. This is an internal administrative tool for the academy, and the primary users (system admins and instructors) utilize English for technical operations.
 
 ### About Privacy
 
