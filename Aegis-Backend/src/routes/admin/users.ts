@@ -19,7 +19,10 @@ const listQuerySchema = z.object({
   role: z.enum(['admin', 'learner']).optional(),
   session: z.enum(['AM', 'PM']).optional(),
   name: z.string().max(100).optional(),
-  include_inactive: z.coerce.boolean().optional(),
+  include_inactive: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
   page: z.coerce.number().int().min(1).default(1),
   per_page: z.coerce.number().int().min(1).max(100).default(20),
 });

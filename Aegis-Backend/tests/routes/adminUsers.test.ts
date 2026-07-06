@@ -65,6 +65,46 @@ describe('GET /api/v1/admin/users', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(400);
   });
+
+  it('passes include_inactive=false correctly (not silently true)', async () => {
+    const { app, token } = await buildTestApp();
+    const svc = await import('../../src/services/userService.js');
+    (svc.listUsersService as any).mockResolvedValue({
+      list: [], total: 0, page: 1, per_page: 20,
+    });
+    await request(app)
+      .get('/api/v1/admin/users?include_inactive=false')
+      .set('Authorization', `Bearer ${token}`);
+    expect(svc.listUsersService).toHaveBeenCalledWith(
+      expect.objectContaining({ includeInactive: false }),
+      1,
+      20,
+    );
+  });
+
+  it('passes include_inactive=true correctly', async () => {
+    const { app, token } = await buildTestApp();
+    const svc = await import('../../src/services/userService.js');
+    (svc.listUsersService as any).mockResolvedValue({
+      list: [], total: 0, page: 1, per_page: 20,
+    });
+    await request(app)
+      .get('/api/v1/admin/users?include_inactive=true')
+      .set('Authorization', `Bearer ${token}`);
+    expect(svc.listUsersService).toHaveBeenCalledWith(
+      expect.objectContaining({ includeInactive: true }),
+      1,
+      20,
+    );
+  });
+
+  it('rejects invalid include_inactive value with 400', async () => {
+    const { app, token } = await buildTestApp();
+    const res = await request(app)
+      .get('/api/v1/admin/users?include_inactive=yes')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('GET /api/v1/admin/users/:id', () => {

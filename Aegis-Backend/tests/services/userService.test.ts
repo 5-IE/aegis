@@ -232,7 +232,6 @@ describe('updateUserService', () => {
   it('rejects role=learner update without session when learner has no existing session', async () => {
     const { svc, uq } = await load();
     // hypothetical existing admin being demoted with no session in patch
-    (uq.findUserByIdAnyState as any).mockResolvedValue(adminRow);
     // admin's existing session field is 'AM' (DB default), so it IS present; test the intended guard
     // Only reject when both are missing. Here we simulate by patching to a hypothetical no-session row.
     const noSession = { ...adminRow, session: undefined as any };
