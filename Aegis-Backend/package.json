@@ -11,6 +11,8 @@
     "test:watch": "vitest",
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
+    "seed:dev": "tsx scripts/seedDev.ts",
+    "seed:reset": "tsx scripts/seedReset.ts",
     "rollup": "tsx scripts/rollupAttendance.ts",
     "lint": "eslint src tests scripts",
     "format": "prettier --write ."

@@ -232,6 +232,51 @@ You should get back a JSON object with `access_token`, `refresh_token`, `expires
 
 ---
 
+## Step 9 — Populate demo data (recommended for UI development)
+
+The backend is now running but the DB has just one admin and nothing else. Every dashboard, list, and live-radar screen will show empty state. The dev seeder fills every table with realistic mock data so you have something to look at while building the UI.
+
+**What it seeds:**
+- 1 admin + 30 learners (mix of AM/PM sessions)
+- 4 rooms with iBeacon devices
+- ~30 days of presence logs, distributed realistically across session windows
+- Attendance history rows with a mix of `early`, `late`, `absent`, and `leave` statuses
+- One unassigned iBeacon (proves the `/beacons` endpoint filters those out)
+
+**Run it:**
+
+```bash
+AEGIS_SEED_DEV=1 npm run seed:dev
+```
+
+The `AEGIS_SEED_DEV=1` gate exists so this can never run by accident in a real environment. **This is destructive** — it truncates all mutable tables (`USER`, `ROOM`, `DEVICE`, `PRESENCE_LOG`, `ATTENDANCE_HISTORY`, `REFRESH_TOKEN`) before seeding.
+
+At the end you'll see:
+
+```
+Dev fixtures complete. Admin login below.
+    username: "admin"
+    password: "password123"
+```
+
+Every seeded user has the same password `password123` for convenience. To log in as any of the 30 learners, list them:
+
+```bash
+mysql -u aegis -p AEGIS -e 'SELECT id_user, username, session FROM USER WHERE role="learner" ORDER BY id_user LIMIT 10;'
+```
+
+Then `POST /auth/login` with `{"username":"<their username>","password":"password123"}`.
+
+**To wipe without reseeding:**
+
+```bash
+AEGIS_SEED_DEV=1 npm run seed:reset
+```
+
+Only truncates. Useful if you want to test seed behavior from a clean slate.
+
+---
+
 ## Everyday commands
 
 Once the initial setup is done, your daily loop is:
@@ -318,3 +363,4 @@ Ctrl+C twice usually gets it. If not: find the process — `lsof -i :3000` on ma
 
 - **[Integrating the API](integrating-the-api.md)** — how to authenticate, call endpoints, refresh tokens, and integrate from a client app.
 - **[API Reference](api-reference.html)** — the full endpoint catalogue. Open it in a browser.
+- **Remote DB access to a shared backend** — if the team has a shared dev VM (e.g. the Rocky 9 deployment), you can point your local DB client at it. See [Deploying to Rocky Linux 9 § Remote MySQL access](deployment-rocky9.md#remote-mysql-access) for host/port/user setup.
