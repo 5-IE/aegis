@@ -89,3 +89,11 @@ export async function currentRoomPerUser(
   );
   return rows;
 }
+
+export async function countPresenceLogsForRoom(roomId: number): Promise<number> {
+  const [rows] = await pool.query<({ c: number } & RowDataPacket)[]>(
+    'SELECT COUNT(*) AS c FROM `PRESENCE_LOG` WHERE `id_room` = ?',
+    [roomId],
+  );
+  return rows[0]?.c ?? 0;
+}
