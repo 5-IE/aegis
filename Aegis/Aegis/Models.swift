@@ -89,10 +89,19 @@ enum TodayAttendanceStatus: Identifiable {
 
     var backgroundColor: Color {
         switch self {
-        case .checkedIn: return Theme.onTimeBackground
-        case .runningLate: return Theme.lateBackground
-        case .notCheckedIn: return Theme.notCheckedInBackground
-        case .onLeave: return Theme.leaveBackground
+        case .checkedIn: return Theme.todayCheckedInBackground
+        case .runningLate: return Theme.todayLateBackground
+        case .notCheckedIn: return Theme.todayNotCheckedInBackground
+        case .onLeave: return Theme.todayLeaveBackground
+        }
+    }
+
+    var illustrationFadeColor: Color {
+        switch self {
+        case .checkedIn: return Theme.todayCheckedInFade
+        case .runningLate: return Theme.todayLateFade
+        case .notCheckedIn: return Theme.todayNotCheckedInFade
+        case .onLeave: return Theme.todayLeaveFade
         }
     }
 

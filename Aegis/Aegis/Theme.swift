@@ -32,6 +32,16 @@ enum Theme {
     static let notCheckedInBackground = Color(hex: 0xE8F2FF)
     static let absentBackground = Color(hex: 0xFFEDED)
 
+    // Today's attendance cards
+    static let todayCheckedInBackground = Color(hex: 0xF1FFF6)
+    static let todayCheckedInFade = Color(hex: 0x408346)
+    static let todayLateBackground = Color(hex: 0xFFFBE3)
+    static let todayLateFade = Color(hex: 0xE3C612)
+    static let todayNotCheckedInBackground = Color(hex: 0xE8F2FF)
+    static let todayNotCheckedInFade = Color(hex: 0x5E76C4)
+    static let todayLeaveBackground = Color(hex: 0xFFEDED)
+    static let todayLeaveFade = Color(hex: 0xC45E5E)
+
     // Shape
     static let cornerRadius: CGFloat = 16
     static let fieldCornerRadius: CGFloat = 12

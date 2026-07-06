@@ -114,23 +114,13 @@ struct TodayAttendanceCard: View {
         .frame(height: 95)
         .background {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            status.backgroundColor,
-                            status.backgroundColor.opacity(0.72),
-                            Theme.cardBackground.opacity(0.9)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .fill(status.backgroundColor)
                 .overlay(alignment: .trailing) {
                     Circle()
-                        .fill(status.accentColor.opacity(0.18))
-                        .frame(width: 88, height: 88)
-                        .blur(radius: 16)
-                        .offset(x: 18)
+                        .fill(status.illustrationFadeColor.opacity(0.35))
+                        .frame(width: 112, height: 112)
+                        .blur(radius: 24)
+                        .offset(x: 16)
                 }
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
