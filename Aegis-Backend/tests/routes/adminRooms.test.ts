@@ -151,24 +151,17 @@ describe('PATCH /api/v1/admin/rooms/:room_id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('rejects empty body with 400', async () => {
+  it('returns 400 when service throws invalid_request for empty body', async () => {
     const { app, token } = await buildTestApp();
-    const res = await request(app)
-      .patch('/api/v1/admin/rooms/5')
-      .set('Authorization', `Bearer ${token}`)
-      .send({});
-    // Route layer accepts empty body but service throws invalid_request.
-    // For symmetry, the service mock must throw or the route must catch.
-    // We assert the response reflects the eventual 400 either way.
     const svc = await import('../../src/services/roomsService.js');
     (svc.updateRoomService as any).mockRejectedValue(
       new (await import('../../src/lib/errors.js')).AppError('invalid_request'),
     );
-    const res2 = await request(app)
+    const res = await request(app)
       .patch('/api/v1/admin/rooms/5')
       .set('Authorization', `Bearer ${token}`)
       .send({});
-    expect(res2.status).toBe(400);
+    expect(res.status).toBe(400);
   });
 });
 
