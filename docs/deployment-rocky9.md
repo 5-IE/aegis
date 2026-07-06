@@ -349,6 +349,76 @@ Now direct hits to `http://<VM_IP>:3000/health` from your laptop will **hang or 
 
 ---
 
+## Remote MySQL access
+
+Sometimes team members on the private network want to point their local DB client (MySQL Workbench, DBeaver, TablePlus, `mysql` CLI) at the deployed database — to inspect data, run ad-hoc queries, or import/export. By default MySQL is bound to `127.0.0.1` and only reachable from the VM itself. To expose it to the LAN:
+
+### 1 — Rebind MySQL to the LAN
+
+By default, `/etc/my.cnf.d/mysql-server.cnf` has no explicit `bind-address` (which means `127.0.0.1`). Add:
+
+```bash
+sudo tee -a /etc/my.cnf.d/mysql-server.cnf > /dev/null <<'EOF'
+
+[mysqld]
+bind-address = 0.0.0.0
+EOF
+sudo systemctl restart mysqld
+sudo ss -tlnp | grep :3306
+# should now show   *:3306   (was 127.0.0.1:3306)
+```
+
+### 2 — Create a `%` variant of the app user
+
+MySQL user identities include the host. `'aegis'@'localhost'` can't log in from anywhere else. Create a matching entry for any host:
+
+```bash
+sudo mysql -e "
+  CREATE USER IF NOT EXISTS 'aegis'@'%' IDENTIFIED BY 'YOUR_DB_PASSWORD';
+  GRANT ALL PRIVILEGES ON AEGIS.* TO 'aegis'@'%';
+  FLUSH PRIVILEGES;
+"
+```
+
+Or, if you want to lock down access to specific IPs (tighter security), replace `%` with the concrete IP: `'aegis'@'10.64.10.5'`.
+
+### 3 — Open port 3306 in firewalld
+
+```bash
+sudo firewall-cmd --permanent --add-port=3306/tcp
+sudo firewall-cmd --reload
+sudo firewall-cmd --list-ports    # should include 3306/tcp
+```
+
+### 4 — Connect from your laptop
+
+Any MySQL client on the same LAN can now connect:
+
+| Field | Value |
+|---|---|
+| Host | `<VM_IP>` |
+| Port | `3306` |
+| User | `aegis` |
+| Password | `YOUR_DB_PASSWORD` |
+| Database | `AEGIS` |
+| SSL | not required on private network |
+
+CLI test:
+
+```bash
+mysql -h <VM_IP> -P 3306 -u aegis -p AEGIS -e 'SHOW TABLES; SELECT id_user, username, role FROM USER LIMIT 5;'
+```
+
+Prerequisite on the client: `mysql-client` installed (`brew install mysql-client` on macOS; `apt install mysql-client` on Debian; a GUI like TablePlus/DBeaver works too).
+
+### Security notes
+
+- `'aegis'@'%'` is unrestricted by source IP. On a private network that's fine; if the VM is ever reachable from the public internet, tighten to a specific IP or move MySQL behind a bastion.
+- `bind-address = 0.0.0.0` makes MySQL listen on every interface. Combined with the firewall opening 3306, the DB is reachable from anywhere on the LAN. Think twice before doing this on a production box exposed to the internet.
+- Consider disabling the `%` user in production after debugging is done: `DROP USER 'aegis'@'%';`
+
+---
+
 ## Everyday operations
 
 Once deployed, your ops loop:
