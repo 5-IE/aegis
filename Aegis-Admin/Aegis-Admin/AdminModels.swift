@@ -1,9 +1,10 @@
-import Combine
 import Foundation
 
 enum AdminSection: String, CaseIterable, Identifiable {
     case dashboard = "Dashboard"
     case liveRadar = "Live Radar"
+    case administration = "Administration"
+    case reports = "Reports"
     case settings = "Settings"
 
     var id: String { rawValue }
@@ -11,150 +12,148 @@ enum AdminSection: String, CaseIterable, Identifiable {
     var symbolName: String {
         switch self {
         case .dashboard:
-            return "clipboard"
+            return "square.grid.2x2"
         case .liveRadar:
             return "map"
+        case .administration:
+            return "person"
+        case .reports:
+            return "doc.text"
         case .settings:
             return "gearshape"
         }
     }
 }
 
-struct DashboardSnapshot {
+enum LoadState: Equatable {
+    case idle
+    case loading
+    case loaded
+    case empty
+    case failed(String)
+}
+
+struct UserSession: Codable, Equatable {
+    let id: Int
+    let username: String
+    let role: String
+    let session: String?
+    let firstName: String?
+    let lastName: String?
+    let email: String
+
+    var displayName: String {
+        let joined = [firstName, lastName]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return joined.isEmpty ? username : joined
+    }
+}
+
+struct DashboardSummary: Equatable {
     let onTime: Int
     let lateClockIn: Int
     let absent: Int
     let noClockIn: Int
 
-    static let mock = DashboardSnapshot(
-        onTime: 120,
-        lateClockIn: 2,
-        absent: 0,
-        noClockIn: 0
-    )
+    static let empty = DashboardSummary(onTime: 0, lateClockIn: 0, absent: 0, noClockIn: 0)
 }
 
-enum RadarStatus {
-    case active
-    case inactive
-}
-
-struct RadarPoint: Identifiable {
+struct AttendanceOverviewRow: Identifiable, Equatable {
     let id = UUID()
-    let x: Double
-    let y: Double
-    let status: RadarStatus
-}
-
-struct Beacon: Identifiable {
-    let id = UUID()
-    let label: String
-    let x: Double
-    let y: Double
-}
-
-struct Occupant: Identifiable {
-    let id = UUID()
-    let learner: String
+    let name: String
     let session: String
-    let duration: String
+    let clockedInAt: String?
+    let clockedOutAt: String?
     let status: String
 }
 
-struct RoomSnapshot: Identifiable {
-    let id: String
+struct Room: Identifiable, Equatable {
+    let id: Int
     let name: String
-    let temperature: String
-    let humidity: String
-    let peopleCount: Int
-    let beacons: [Beacon]
-    let radarPoints: [RadarPoint]
-    let occupants: [Occupant]
+}
 
-    private static let sampleBeacons = [
-        Beacon(label: "B01", x: 0.055, y: 0.085),
-        Beacon(label: "B02", x: 0.955, y: 0.085),
-        Beacon(label: "B03", x: 0.50, y: 0.90)
-    ]
+struct RadarPoint: Identifiable, Equatable {
+    let id: Int
+    let userName: String
+    let session: String?
+    let x: Double
+    let y: Double
+}
 
-    private static let sampleRadarPoints = [
-        RadarPoint(x: 0.24, y: 0.36, status: .active),
-        RadarPoint(x: 0.265, y: 0.39, status: .active),
-        RadarPoint(x: 0.69, y: 0.25, status: .active),
-        RadarPoint(x: 0.80, y: 0.59, status: .active),
-        RadarPoint(x: 0.485, y: 0.59, status: .inactive)
-    ]
+struct Occupant: Identifiable, Equatable {
+    let id: Int
+    let learner: String
+    let session: String
+    let durationSeconds: Int
+    let status: String
 
-    private static let sampleOccupants = [
-        Occupant(learner: "Azzahra Dita Alfatrah", session: "PM", duration: "2h 20m", status: "Active"),
-        Occupant(learner: "Steve Agustinus", session: "PM", duration: "1h 50m", status: "Active"),
-        Occupant(learner: "Felicia Susanto", session: "PM", duration: "2h 20m", status: "Active"),
-        Occupant(learner: "William Antoline", session: "PM", duration: "2h 05m", status: "Inactive"),
-        Occupant(learner: "Hardy Tee", session: "PM", duration: "2h 34m", status: "Active")
-    ]
-
-    static let mockRooms: [RoomSnapshot] = [
-        RoomSnapshot(
-            id: "room-1",
-            name: "Room 1",
-            temperature: "22,5\u{00B0}C",
-            humidity: "45%",
-            peopleCount: 25,
-            beacons: sampleBeacons,
-            radarPoints: sampleRadarPoints,
-            occupants: sampleOccupants
-        ),
-        RoomSnapshot.demo(id: "room-2", name: "Room 2", temperature: "23,1\u{00B0}C", humidity: "48%", peopleCount: 18),
-        RoomSnapshot.demo(id: "room-3", name: "Room 3", temperature: "21,9\u{00B0}C", humidity: "43%", peopleCount: 21),
-        RoomSnapshot.demo(id: "room-4", name: "Room 4", temperature: "22,7\u{00B0}C", humidity: "46%", peopleCount: 14),
-        RoomSnapshot.demo(id: "room-5", name: "Room 5", temperature: "22,4\u{00B0}C", humidity: "44%", peopleCount: 16)
-    ]
-
-    private static func demo(id: String, name: String, temperature: String, humidity: String, peopleCount: Int) -> RoomSnapshot {
-        RoomSnapshot(
-            id: id,
-            name: name,
-            temperature: temperature,
-            humidity: humidity,
-            peopleCount: peopleCount,
-            beacons: sampleBeacons,
-            radarPoints: sampleRadarPoints,
-            occupants: sampleOccupants
-        )
+    var formattedDuration: String {
+        let hours = durationSeconds / 3600
+        let minutes = (durationSeconds % 3600) / 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        return "\(minutes)m"
     }
 }
 
-protocol AdminDataProviding {
-    var dashboard: DashboardSnapshot { get }
-    var rooms: [RoomSnapshot] { get }
+struct RoomMetrics: Equatable {
+    let temperature: Double
+    let humidity: Double
+    let peopleInRoom: Int
+
+    static let empty = RoomMetrics(temperature: 0, humidity: 0, peopleInRoom: 0)
 }
 
-struct MockAdminDataProvider: AdminDataProviding {
-    let dashboard = DashboardSnapshot.mock
-    let rooms = RoomSnapshot.mockRooms
+struct SessionConfig: Equatable {
+    var startTime: String
+    var lateAfter: String
+    var endTime: String
 }
 
-@MainActor
-final class AdminViewModel: ObservableObject {
-    @Published var selectedSection: AdminSection = .dashboard
-    @Published var selectedRoomID = RoomSnapshot.mockRooms[0].id
-    @Published var dashboard: DashboardSnapshot
-    @Published var rooms: [RoomSnapshot]
+struct SessionConfigs: Equatable {
+    var am: SessionConfig
+    var pm: SessionConfig
 
-    init() {
-        let dataProvider = MockAdminDataProvider()
-        self.dashboard = dataProvider.dashboard
-        self.rooms = dataProvider.rooms
-        self.selectedRoomID = dataProvider.rooms[0].id
-    }
+    static let empty = SessionConfigs(
+        am: SessionConfig(startTime: "08:00:00", lateAfter: "08:15:00", endTime: "12:00:00"),
+        pm: SessionConfig(startTime: "13:00:00", lateAfter: "13:15:00", endTime: "17:00:00")
+    )
+}
 
-    init(dataProvider: AdminDataProviding) {
-        self.dashboard = dataProvider.dashboard
-        self.rooms = dataProvider.rooms
-        self.selectedRoomID = dataProvider.rooms[0].id
-    }
+struct SystemConfig: Equatable {
+    var presenceStalenessMinutes: Int
+    var timezone: String
 
-    var selectedRoom: RoomSnapshot {
-        rooms.first { $0.id == selectedRoomID } ?? rooms[0]
+    static let empty = SystemConfig(presenceStalenessMinutes: 5, timezone: "Asia/Jakarta")
+}
+
+enum SessionFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case am = "AM"
+    case pm = "PM"
+
+    var id: String { rawValue }
+    var queryValue: String? { self == .all ? nil : rawValue }
+}
+
+extension String {
+    var titleCasedStatus: String {
+        switch self {
+        case "Not Checked In":
+            return "Not checked in"
+        case "Running Late":
+            return "Running late"
+        case "Checked In":
+            return "Checked in"
+        case "Checked Out":
+            return "Checked out"
+        case "Not Checked Out":
+            return "Not checked out"
+        default:
+            return self
+        }
     }
 }

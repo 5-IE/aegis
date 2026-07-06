@@ -1,63 +1,44 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = AdminViewModel()
+    @StateObject private var sessionStore = SessionStore()
 
     var body: some View {
-        HStack(spacing: 0) {
-            SidebarView(selection: $viewModel.selectedSection)
-                .frame(width: 244)
-
-            Group {
-                switch viewModel.selectedSection {
-                case .dashboard:
-                    DashboardView(snapshot: viewModel.dashboard)
-                case .liveRadar:
-                    LiveRadarView(
-                        rooms: viewModel.rooms,
-                        selectedRoomID: $viewModel.selectedRoomID,
-                        selectedRoom: viewModel.selectedRoom
-                    )
-                case .settings:
-                    SettingsView()
-                }
+        Group {
+            switch sessionStore.state {
+            case .restoring:
+                RestoringSessionView()
+            case .signedOut:
+                LoginView(sessionStore: sessionStore)
+            case let .signedIn(user):
+                AdminShellView(sessionStore: sessionStore, user: user)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 1120, minHeight: 760)
-        .background(activeBackground)
-    }
-
-    private var activeBackground: some View {
-        Group {
-            if viewModel.selectedSection == .liveRadar {
-                AegisColors.liveBackground
-            } else {
-                AegisColors.dashboardBackground
-            }
+        .task {
+            await sessionStore.restoreSession()
         }
     }
 }
 
 private enum AegisColors {
     static let ink = Color(red: 0.04, green: 0.05, blue: 0.06)
-    static let mutedText = Color(red: 0.40, green: 0.42, blue: 0.43)
+    static let mutedText = Color(red: 0.42, green: 0.45, blue: 0.46)
     static let teal = Color(red: 0.30, green: 0.42, blue: 0.45)
-    static let tealDark = Color(red: 0.24, green: 0.35, blue: 0.38)
-    static let divider = Color(red: 0.74, green: 0.75, blue: 0.75)
+    static let tealDark = Color(red: 0.24, green: 0.36, blue: 0.39)
+    static let tableHeader = Color(red: 0.70, green: 0.82, blue: 0.85)
     static let dashboardBackground = Color(red: 0.985, green: 0.985, blue: 0.985)
-    static let sidebarBackground = Color(red: 0.99, green: 0.99, blue: 0.99)
-    static let cardShadow = Color.black.opacity(0.20)
-    static let activeBlue = Color(red: 0.31, green: 0.39, blue: 0.74)
-    static let activeGreen = Color(red: 0.30, green: 0.72, blue: 0.27)
-    static let inactiveYellow = Color(red: 0.78, green: 0.69, blue: 0.20)
+    static let panelBorder = Color.black.opacity(0.08)
+    static let cardShadow = Color.black.opacity(0.16)
+    static let activeGreen = Color(red: 0.24, green: 0.70, blue: 0.25)
+    static let inactiveYellow = Color(red: 0.77, green: 0.68, blue: 0.20)
     static let beaconBlue = Color(red: 0.29, green: 0.31, blue: 0.58)
 
-    static var liveBackground: some View {
+    static var appBackground: some View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.71, green: 0.84, blue: 0.88),
+                    Color(red: 0.70, green: 0.84, blue: 0.88),
                     Color(red: 0.88, green: 0.92, blue: 0.86),
                     Color(red: 0.72, green: 0.86, blue: 0.91)
                 ],
@@ -65,73 +46,288 @@ private enum AegisColors {
                 endPoint: .bottomTrailing
             )
             RadialGradient(
-                colors: [
-                    Color.white.opacity(0.58),
-                    Color.white.opacity(0.05)
-                ],
+                colors: [Color.white.opacity(0.52), Color.white.opacity(0.04)],
                 center: .center,
-                startRadius: 80,
-                endRadius: 720
+                startRadius: 70,
+                endRadius: 700
             )
             RadialGradient(
-                colors: [
-                    Color(red: 0.79, green: 0.86, blue: 0.65).opacity(0.32),
-                    .clear
-                ],
+                colors: [Color(red: 0.78, green: 0.86, blue: 0.65).opacity(0.32), .clear],
                 center: .bottomTrailing,
                 startRadius: 70,
-                endRadius: 520
+                endRadius: 500
             )
+        }
+    }
+}
+
+private struct RestoringSessionView: View {
+    var body: some View {
+        ZStack {
+            AegisColors.appBackground
+            ProgressView()
+                .controlSize(.large)
+        }
+    }
+}
+
+private struct LoginView: View {
+    @ObservedObject var sessionStore: SessionStore
+    @StateObject private var viewModel = LoginViewModel()
+
+    var body: some View {
+        HStack(spacing: 64) {
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer()
+
+                Text("Welcome to Aegis")
+                    .font(.system(size: 31, weight: .bold))
+                    .foregroundStyle(.black)
+                    .padding(.bottom, 12)
+
+                Text("Login to manage your account")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(AegisColors.mutedText)
+                    .padding(.bottom, 28)
+
+                LoginInputField(
+                    icon: "person",
+                    placeholder: "Enter your email or phone",
+                    text: $viewModel.username
+                )
+                .padding(.bottom, 16)
+
+                LoginSecureField(
+                    icon: "lock",
+                    placeholder: "Enter your password",
+                    text: $viewModel.password
+                )
+                .padding(.bottom, 10)
+
+                HStack {
+                    Spacer()
+                    Button("Forgot Password?") {
+                        viewModel.disabledFeatureMessage = "Password reset is not available yet."
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AegisColors.teal)
+                }
+                .padding(.bottom, 27)
+
+                Button {
+                    Task { await viewModel.signIn(sessionStore: sessionStore) }
+                } label: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(AegisColors.teal)
+                            .shadow(color: Color.black.opacity(0.20), radius: 4, x: 0, y: 2)
+
+                        if viewModel.isSigningIn {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                        } else {
+                            Text("SIGN IN")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .frame(height: 48)
+                }
+                .buttonStyle(.plain)
+                .disabled(!viewModel.canSubmit)
+                .opacity(viewModel.canSubmit ? 1 : 0.58)
+                .padding(.bottom, 28)
+
+                HStack(spacing: 4) {
+                    Spacer()
+                    Text("Don't have account?")
+                        .foregroundStyle(AegisColors.mutedText)
+                    Button("Sign Up") {
+                        viewModel.disabledFeatureMessage = "Account registration is not available yet."
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AegisColors.teal)
+                    .fontWeight(.bold)
+                    Spacer()
+                }
+                .font(.system(size: 12, weight: .semibold))
+
+                if let error = sessionStore.authError ?? viewModel.disabledFeatureMessage {
+                    Text(error)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.75, green: 0.12, blue: 0.12))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 20)
+                }
+
+                Spacer()
+            }
+            .frame(width: 440)
+
+            Image("LoginHero")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 540, height: 700)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .clipped()
+        }
+        .padding(.horizontal, 56)
+        .padding(.vertical, 28)
+        .background(Color.white)
+    }
+}
+
+private struct LoginInputField: View {
+    let icon: String
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.gray.opacity(0.85))
+                .frame(width: 18)
+
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, weight: .medium))
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 46)
+        .background(Color.white)
+        .overlay {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .stroke(Color.black.opacity(0.18), lineWidth: 1)
+        }
+    }
+}
+
+private struct LoginSecureField: View {
+    let icon: String
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.gray.opacity(0.85))
+                .frame(width: 18)
+
+            SecureField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, weight: .medium))
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 46)
+        .background(Color.white)
+        .overlay {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .stroke(Color.black.opacity(0.18), lineWidth: 1)
+        }
+    }
+}
+
+private struct AdminShellView: View {
+    @ObservedObject var sessionStore: SessionStore
+    let user: UserSession
+    @State private var selectedSection: AdminSection = .dashboard
+    @StateObject private var dashboardViewModel = DashboardViewModel()
+    @StateObject private var liveRadarViewModel = LiveRadarViewModel()
+    @StateObject private var settingsViewModel = SettingsViewModel()
+
+    var body: some View {
+        HStack(spacing: 0) {
+            SidebarView(
+                selection: $selectedSection,
+                user: user,
+                signOut: { Task { await sessionStore.signOut() } }
+            )
+            .frame(width: 214)
+
+            ZStack {
+                AegisColors.appBackground
+                activeScreen
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var activeScreen: some View {
+        switch selectedSection {
+        case .dashboard:
+            DashboardView(viewModel: dashboardViewModel, sessionStore: sessionStore)
+        case .liveRadar:
+            LiveRadarView(viewModel: liveRadarViewModel, sessionStore: sessionStore)
+        case .administration:
+            ComingSoonView(title: "Administration", icon: "person.2.fill")
+        case .reports:
+            ComingSoonView(title: "Reports", icon: "doc.text.fill")
+        case .settings:
+            SettingsView(viewModel: settingsViewModel, sessionStore: sessionStore)
         }
     }
 }
 
 private struct SidebarView: View {
     @Binding var selection: AdminSection
+    let user: UserSession
+    let signOut: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 14) {
+            HStack(spacing: 11) {
                 Image(systemName: "shield.lefthalf.filled")
-                    .font(.system(size: 34, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
                 Text("Aegis")
-                    .font(.system(size: 31, weight: .bold))
+                    .font(.system(size: 25, weight: .bold))
             }
             .foregroundStyle(AegisColors.teal)
             .padding(.top, 42)
-            .padding(.horizontal, 34)
+            .padding(.horizontal, 28)
 
-            VStack(alignment: .leading, spacing: 21) {
+            VStack(alignment: .leading, spacing: 14) {
                 ForEach(AdminSection.allCases) { section in
-                    SidebarItem(
-                        section: section,
-                        isSelected: section == selection
-                    ) {
+                    SidebarItem(section: section, isSelected: section == selection) {
                         selection = section
                     }
                 }
             }
-            .padding(.top, 28)
-            .padding(.horizontal, 14)
+            .padding(.top, 34)
+            .padding(.horizontal, 18)
 
             Spacer()
+
+            Button(action: signOut) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.gray.opacity(0.70))
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 36, height: 36)
+
+                    Text(user.displayName == "admin" ? "Admin" : user.displayName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AegisColors.tealDark)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 34)
+            }
+            .buttonStyle(.plain)
         }
-        .background(sidebarBackground)
+        .background(Color.white)
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(Color.black.opacity(selection == .liveRadar ? 0.15 : 0.03))
+                .fill(Color.black.opacity(0.08))
                 .frame(width: 1)
-        }
-    }
-
-    private var sidebarBackground: some View {
-        Group {
-            if selection == .liveRadar {
-                AegisColors.liveBackground
-                    .opacity(0.82)
-            } else {
-                AegisColors.sidebarBackground
-            }
         }
     }
 }
@@ -143,31 +339,31 @@ private struct SidebarItem: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 18) {
+            HStack(spacing: 13) {
                 Image(systemName: section.symbolName)
-                    .font(.system(size: 20, weight: .semibold))
-                    .frame(width: 24)
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 20)
 
                 Text(section.rawValue)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
 
-                Spacer()
+                Spacer(minLength: 0)
             }
             .foregroundStyle(isSelected ? Color.white : AegisColors.mutedText)
-            .frame(height: 43)
-            .padding(.horizontal, 18)
+            .frame(height: 34)
+            .padding(.horizontal, 13)
             .background {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(AegisColors.teal)
                         .overlay(alignment: .trailing) {
                             RadialGradient(
-                                colors: [Color.white.opacity(0.32), .clear],
+                                colors: [Color.white.opacity(0.38), .clear],
                                 center: .trailing,
                                 startRadius: 0,
-                                endRadius: 42
+                                endRadius: 38
                             )
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                         }
                 }
             }
@@ -177,112 +373,94 @@ private struct SidebarItem: View {
 }
 
 private struct DashboardView: View {
-    let snapshot: DashboardSnapshot
+    @ObservedObject var viewModel: DashboardViewModel
+    @ObservedObject var sessionStore: SessionStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            TopBar(title: "Dashboard", textColor: AegisColors.ink)
-
-            HStack(spacing: 38) {
-                PresentSummaryCard(snapshot: snapshot)
-                    .frame(maxWidth: .infinity)
-
-                AbsentSummaryCard(snapshot: snapshot)
-                    .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 24) {
+            HStack {
+                Text("Dashboard")
+                    .screenTitle()
+                Spacer()
+                DateChip(text: viewModel.formattedDate)
             }
-            .frame(height: 180)
 
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: AegisColors.cardShadow.opacity(0.55), radius: 6, x: 0, y: 2)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack(spacing: 36) {
+                PresentSummaryCard(summary: viewModel.summary)
+                AbsentSummaryCard(summary: viewModel.summary)
+            }
+            .frame(height: 132)
+
+            WhitePanel {
+                VStack(alignment: .leading, spacing: 15) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Daily Attendance Overview")
+                                .font(.system(size: 16, weight: .bold))
+                            Text(viewModel.shortDate)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AegisColors.mutedText)
+                        }
+
+                        Spacer()
+
+                        SearchField(text: $viewModel.searchText, placeholder: "Search by Name...")
+                            .frame(width: 210)
+                            .onSubmit {
+                                Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
+                            }
+
+                        Menu {
+                            Picker("Session", selection: $viewModel.sessionFilter) {
+                                ForEach(SessionFilter.allCases) { filter in
+                                    Text(filter.rawValue).tag(filter)
+                                }
+                            }
+                            Button("Apply") {
+                                Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
+                            }
+                        } label: {
+                            Image(systemName: "line.3.horizontal.decrease")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(AegisColors.teal)
+                                .frame(width: 30, height: 30)
+                                .background(Circle().fill(Color.white))
+                        }
+                        .menuStyle(.borderlessButton)
+                    }
+
+                    AttendanceTable(rows: viewModel.overviewRows, state: viewModel.state)
+                }
+            }
+            .frame(maxHeight: .infinity)
         }
-        .padding(.top, 57)
-        .padding(.leading, 30)
-        .padding(.trailing, 35)
-        .padding(.bottom, 32)
-        .background(AegisColors.dashboardBackground)
-    }
-}
-
-private struct TopBar: View {
-    let title: String
-    let textColor: Color
-
-    var body: some View {
-        HStack(alignment: .center) {
-            Text(title)
-                .font(.system(size: 31, weight: .bold))
-                .foregroundStyle(textColor)
-
-            Spacer()
-
-            ProfileButton()
+        .screenPadding()
+        .task {
+            if viewModel.state == .idle {
+                await viewModel.load(sessionStore: sessionStore)
+            }
         }
-        .frame(height: 39)
-    }
-}
-
-private struct ProfileButton: View {
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color(red: 0.58, green: 0.58, blue: 0.58))
-
-            Image(systemName: "person.fill")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(Color.white)
-                .offset(y: 1)
-        }
-        .frame(width: 50, height: 50)
     }
 }
 
 private struct PresentSummaryCard: View {
-    let snapshot: DashboardSnapshot
+    let summary: DashboardSummary
 
     var body: some View {
         SummaryCard {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(AegisColors.activeBlue)
-                        .frame(width: 40, height: 40)
+            HStack(alignment: .top, spacing: 15) {
+                MetricIcon(symbol: "person.fill.checkmark", color: Color(red: 0.34, green: 0.68, blue: 0.73), background: Color(red: 0.75, green: 0.90, blue: 0.93))
+                    .padding(.top, 3)
 
+                VStack(alignment: .leading, spacing: 21) {
                     Text("Present Summary")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(AegisColors.teal)
-                }
-
-                HStack(alignment: .top, spacing: 25) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 10) {
-                            Text("On time")
-                            Image(systemName: "person.fill.checkmark")
-                        }
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(AegisColors.mutedText)
-
-                        Text("\(snapshot.onTime)")
-                            .font(.system(size: 34, weight: .bold))
-                            .foregroundStyle(Color.black)
+                        .font(.system(size: 16, weight: .bold))
+                    HStack(alignment: .top, spacing: 30) {
+                        SummaryMetric(label: "On time", value: "\(summary.onTime)")
+                        Divider()
+                            .frame(height: 67)
+                        SummaryMetric(label: "Late Clock-in", value: "\(summary.lateClockIn)")
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Rectangle()
-                        .fill(AegisColors.divider)
-                        .frame(width: 1, height: 78)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Late Clock-in")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(AegisColors.mutedText)
-
-                        Text("\(snapshot.lateClockIn)")
-                            .font(.system(size: 34, weight: .bold))
-                            .foregroundStyle(Color.black)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -290,46 +468,23 @@ private struct PresentSummaryCard: View {
 }
 
 private struct AbsentSummaryCard: View {
-    let snapshot: DashboardSnapshot
+    let summary: DashboardSummary
 
     var body: some View {
         SummaryCard {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(spacing: 13) {
-                    Image(systemName: "person.fill.xmark")
-                        .font(.system(size: 23, weight: .bold))
-                        .foregroundStyle(AegisColors.teal)
-                        .frame(width: 30)
+            HStack(alignment: .top, spacing: 15) {
+                MetricIcon(symbol: "person.fill.xmark", color: AegisColors.teal, background: Color(red: 0.78, green: 0.91, blue: 0.94))
+                    .padding(.top, 3)
 
+                VStack(alignment: .leading, spacing: 21) {
                     Text("Absent Summary")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(AegisColors.teal)
-                }
-
-                HStack(alignment: .top, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Absent")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(AegisColors.mutedText)
-
-                        Text(snapshot.absent == 0 ? " " : "\(snapshot.absent)")
-                            .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
+                    HStack(alignment: .top, spacing: 30) {
+                        SummaryMetric(label: "Absent", value: "\(summary.absent)")
+                        Divider()
+                            .frame(height: 67)
+                        SummaryMetric(label: "No Clock-in", value: "\(summary.noClockIn)")
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Rectangle()
-                        .fill(AegisColors.divider)
-                        .frame(width: 1, height: 82)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("No Clock-in")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(AegisColors.mutedText)
-
-                        Text(snapshot.noClockIn == 0 ? " " : "\(snapshot.noClockIn)")
-                            .font(.system(size: 28, weight: .bold))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -337,122 +492,640 @@ private struct AbsentSummaryCard: View {
 }
 
 private struct SummaryCard<Content: View>: View {
-    let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
+    @ViewBuilder let content: Content
 
     var body: some View {
         content
-            .padding(.horizontal, 24)
-            .padding(.vertical, 27)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .shadow(color: AegisColors.cardShadow, radius: 6, x: 0, y: 3)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 22)
+            .background(Color.white.opacity(0.94))
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .shadow(color: AegisColors.cardShadow, radius: 5, x: 0, y: 2)
+    }
+}
+
+private struct SummaryMetric: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AegisColors.mutedText)
+            Text(value)
+                .font(.system(size: 31, weight: .bold))
+                .foregroundStyle(.black)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct AttendanceTable: View {
+    let rows: [AttendanceOverviewRow]
+    let state: LoadState
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TableHeader(columns: [
+                ("Learner", .infinity),
+                ("Session", 110),
+                ("Clock-in", 130),
+                ("Clock-out", 130),
+                ("Status", 110)
+            ])
+
+            if case .loading = state {
+                TableMessage("Loading attendance...")
+            } else if rows.isEmpty {
+                TableMessage("No attendance data yet.")
+            } else {
+                ForEach(rows) { row in
+                    HStack(spacing: 0) {
+                        Text(row.name).tableCell(maxWidth: .infinity, alignment: .leading)
+                        Text(row.session).tableCell(width: 110)
+                        Text(formatDateTime(row.clockedInAt)).tableCell(width: 130)
+                        Text(formatDateTime(row.clockedOutAt)).tableCell(width: 130)
+                        Text(row.status.titleCasedStatus)
+                            .foregroundStyle(statusColor(row.status))
+                            .tableCell(width: 110)
+                    }
+                    .frame(height: 46)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                    }
+                }
+            }
+
+            if case let .failed(message) = state {
+                ErrorBanner(message: message)
+                    .padding(.top, 12)
+            }
+
+            Spacer(minLength: 0)
+        }
     }
 }
 
 private struct LiveRadarView: View {
-    let rooms: [RoomSnapshot]
-    @Binding var selectedRoomID: String
-    let selectedRoom: RoomSnapshot
+    @ObservedObject var viewModel: LiveRadarViewModel
+    @ObservedObject var sessionStore: SessionStore
 
     var body: some View {
-        ZStack {
-            AegisColors.liveBackground
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Live Radar")
+                .screenTitle()
 
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 14) {
-                    TopBar(title: "Live Radar", textColor: .black)
-
-                    RoomTabs(rooms: rooms, selectedRoomID: $selectedRoomID)
-
-                    HStack(alignment: .top, spacing: 20) {
-                        VStack(spacing: 20) {
-                            RadarMapCard(room: selectedRoom)
-                                .frame(height: 410)
-
-                            OccupantsTable(room: selectedRoom)
-                                .frame(height: 255)
+            HStack(spacing: 11) {
+                if viewModel.rooms.isEmpty {
+                    RoomTab(title: "Room 1", isSelected: true) {}
+                    RoomTab(title: "Room 2", isSelected: false) {}
+                    RoomTab(title: "Room 3", isSelected: false) {}
+                    RoomTab(title: "Room 4", isSelected: false) {}
+                    RoomTab(title: "Room 5", isSelected: false) {}
+                } else {
+                    ForEach(viewModel.rooms) { room in
+                        RoomTab(title: room.name, isSelected: room.id == viewModel.selectedRoomID) {
+                            viewModel.select(roomID: room.id, sessionStore: sessionStore)
                         }
-                        .frame(maxWidth: .infinity)
-
-                        MetricsColumn(room: selectedRoom)
-                            .frame(width: 276)
                     }
                 }
-                .padding(.top, 58)
-                .padding(.leading, 28)
-                .padding(.trailing, 35)
-                .padding(.bottom, 30)
             }
+
+            HStack(alignment: .top, spacing: 20) {
+                VStack(spacing: 20) {
+                    RadarMapCard(points: viewModel.radarPoints, state: viewModel.state)
+                        .frame(height: 340)
+
+                    WhitePanel {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                Label("Current Occupants", systemImage: "person.2.fill")
+                                    .font(.system(size: 16, weight: .bold))
+                                Spacer()
+                                SearchField(text: $viewModel.occupantsSearchText, placeholder: "Search by Name...")
+                                    .frame(width: 210)
+                                Image(systemName: "line.3.horizontal.decrease")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(AegisColors.teal)
+                                    .frame(width: 30, height: 30)
+                                    .background(Circle().fill(Color.white))
+                            }
+                            OccupantsTable(rows: viewModel.filteredOccupants, state: viewModel.state)
+                        }
+                    }
+                    .frame(maxHeight: .infinity)
+                }
+
+                VStack(spacing: 22) {
+                    MetricCard(
+                        icon: "thermometer.medium",
+                        iconColor: Color(red: 0.93, green: 0.42, blue: 0.49),
+                        iconBackground: Color(red: 1.0, green: 0.68, blue: 0.72),
+                        title: "Room Temperature",
+                        value: String(format: "%.1f\u{00B0}C", viewModel.metrics.temperature).replacingOccurrences(of: ".", with: ",")
+                    )
+                    MetricCard(
+                        icon: "humidity.fill",
+                        iconColor: Color(red: 0.17, green: 0.58, blue: 0.70),
+                        iconBackground: Color(red: 0.66, green: 0.88, blue: 0.93),
+                        title: "Humidity",
+                        value: "\(Int(viewModel.metrics.humidity.rounded()))%"
+                    )
+                    MetricCard(
+                        icon: "person.3.fill",
+                        iconColor: Color(red: 0.24, green: 0.60, blue: 0.22),
+                        iconBackground: Color(red: 0.69, green: 0.91, blue: 0.66),
+                        title: "People in Room",
+                        value: "\(viewModel.metrics.peopleInRoom)"
+                    )
+                    Spacer()
+                }
+                .frame(width: 240)
+            }
+        }
+        .screenPadding()
+        .task {
+            if viewModel.state == .idle {
+                await viewModel.load(sessionStore: sessionStore)
+            }
+            viewModel.startPolling(sessionStore: sessionStore)
+        }
+        .onDisappear {
+            viewModel.stopPolling()
         }
     }
 }
 
-private struct RoomTabs: View {
-    let rooms: [RoomSnapshot]
-    @Binding var selectedRoomID: String
+private struct RoomTab: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            ForEach(rooms) { room in
-                Button {
-                    selectedRoomID = room.id
-                } label: {
-                    Text(room.name)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(room.id == selectedRoomID ? Color.white : Color.gray)
-                        .frame(width: 114, height: 37)
-                        .background {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(room.id == selectedRoomID ? AegisColors.teal : Color.white.opacity(0.92))
-                                .shadow(
-                                    color: room.id == selectedRoomID ? Color.black.opacity(0.16) : .clear,
-                                    radius: 4,
-                                    x: 0,
-                                    y: 2
-                                )
-                        }
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isSelected ? .white : Color.gray)
+                .frame(width: 108, height: 32)
+                .background {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isSelected ? AegisColors.teal : Color.white.opacity(0.92))
                 }
-                .buttonStyle(.plain)
-            }
         }
-        .padding(.top, 6)
+        .buttonStyle(.plain)
     }
 }
 
 private struct RadarMapCard: View {
-    let room: RoomSnapshot
+    let points: [RadarPoint]
+    let state: LoadState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            HStack(alignment: .center) {
-                HStack(spacing: 12) {
-                    Image(systemName: "map")
-                        .font(.system(size: 20, weight: .semibold))
-
-                    Text("Live Trilateration Map")
+        WhitePanel {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("Live Trilateration Map", systemImage: "map")
                         .font(.system(size: 16, weight: .bold))
-                }
-                .foregroundStyle(.black)
-
-                Spacer()
-
-                HStack(spacing: 22) {
+                    Spacer()
                     LegendItem(color: AegisColors.activeGreen, label: "Active")
                     LegendItem(color: AegisColors.inactiveYellow, label: "Inactive")
                 }
+                RadarPlot(points: points)
+                    .overlay {
+                        if case .loading = state {
+                            ProgressView()
+                        } else if points.isEmpty {
+                            Text("No live map points.")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AegisColors.mutedText)
+                        }
+                    }
             }
-            .padding(.horizontal, 2)
+        }
+    }
+}
 
-            RadarPlot(room: room)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+private struct RadarPlot: View {
+    let points: [RadarPoint]
+
+    private let beacons = [
+        BeaconMarkerData(label: "B01", x: 0.055, y: 0.085),
+        BeaconMarkerData(label: "B02", x: 0.955, y: 0.085),
+        BeaconMarkerData(label: "B03", x: 0.50, y: 0.90)
+    ]
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let plotRect = CGRect(
+                x: size.width * 0.045,
+                y: size.height * 0.075,
+                width: size.width * 0.91,
+                height: size.height * 0.82
+            )
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.black.opacity(0.09))
+
+                Path { path in
+                    path.addRoundedRect(in: plotRect, cornerSize: CGSize(width: 7, height: 7))
+                }
+                .stroke(Color(red: 0.30, green: 0.36, blue: 0.60).opacity(0.75), lineWidth: 1)
+
+                ForEach(points) { point in
+                    Circle()
+                        .fill(AegisColors.activeGreen)
+                        .frame(width: 17, height: 17)
+                        .position(x: size.width * point.x, y: size.height * point.y)
+                        .help(point.userName)
+                }
+
+                ForEach(beacons) { beacon in
+                    BeaconMarker(beacon: beacon)
+                        .position(x: size.width * beacon.x, y: size.height * beacon.y)
+                }
+            }
+        }
+    }
+}
+
+private struct BeaconMarkerData: Identifiable {
+    let id = UUID()
+    let label: String
+    let x: Double
+    let y: Double
+}
+
+private struct BeaconMarker: View {
+    let beacon: BeaconMarkerData
+
+    var body: some View {
+        VStack(spacing: 2) {
+            if beacon.y < 0.5 { label }
+            Circle()
+                .fill(AegisColors.beaconBlue)
+                .overlay(Circle().stroke(Color.black.opacity(0.35), lineWidth: 1))
+                .frame(width: 16, height: 16)
+            if beacon.y >= 0.5 { label }
+        }
+    }
+
+    private var label: some View {
+        Text(beacon.label)
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(AegisColors.beaconBlue)
+    }
+}
+
+private struct OccupantsTable: View {
+    let rows: [Occupant]
+    let state: LoadState
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TableHeader(columns: [
+                ("Learner", .infinity),
+                ("Session", 100),
+                ("Duration", 130),
+                ("Status", 110),
+                ("Last Update", 110)
+            ])
+
+            if case .loading = state {
+                TableMessage("Loading occupants...")
+            } else if rows.isEmpty {
+                TableMessage("No current occupants.")
+            } else {
+                ForEach(rows) { row in
+                    HStack(spacing: 0) {
+                        Text(row.learner).tableCell(maxWidth: .infinity, alignment: .leading)
+                        Text(row.session).tableCell(width: 100)
+                        Text(row.formattedDuration).tableCell(width: 130)
+                        Text(row.status.titleCasedStatus)
+                            .foregroundStyle(statusColor(row.status))
+                            .tableCell(width: 110)
+                        Text("Now").tableCell(width: 110)
+                    }
+                    .frame(height: 46)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                    }
+                }
+            }
+
+            if case let .failed(message) = state {
+                ErrorBanner(message: message)
+                    .padding(.top, 12)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct SettingsView: View {
+    @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var sessionStore: SessionStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 34) {
+            Text("Settings")
+                .screenTitle()
+
+            WhitePanel {
+                VStack(alignment: .leading, spacing: 24) {
+                    Label("Attendance Setting", systemImage: "gearshape.fill")
+                        .font(.system(size: 16, weight: .bold))
+
+                    SettingsSubpanel(title: "Session Thresholds", icon: "clock") {
+                        VStack(spacing: 18) {
+                            SessionThresholdRow(title: "AM Session", config: $viewModel.sessionConfigs.am)
+                            SessionThresholdRow(title: "PM Session", config: $viewModel.sessionConfigs.pm)
+                        }
+                    }
+
+                    SettingsSubpanel(title: "Late Check-in", icon: "clock.badge.exclamationmark") {
+                        HStack(spacing: 12) {
+                            TimeField(text: $viewModel.sessionConfigs.am.lateAfter)
+                            Text("AM tolerance")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AegisColors.mutedText)
+                            TimeField(text: $viewModel.sessionConfigs.pm.lateAfter)
+                            Text("PM tolerance")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AegisColors.mutedText)
+                            Spacer()
+                        }
+                        Text("Check-ins after the late threshold are marked late by the backend.")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AegisColors.mutedText)
+                    }
+
+                    Label("User Presence Update Interval", systemImage: "clock.arrow.circlepath")
+                        .font(.system(size: 16, weight: .bold))
+                        .padding(.top, 4)
+
+                    SettingsSubpanel(title: "Adjust Interval", icon: "arrow.clockwise") {
+                        HStack {
+                            Stepper(value: $viewModel.systemConfig.presenceStalenessMinutes, in: 1...60) {
+                                Text("\(viewModel.systemConfig.presenceStalenessMinutes) minutes")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .frame(width: 220)
+                            Spacer()
+                            TextField("Timezone", text: $viewModel.systemConfig.timezone)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 180)
+                        }
+                        Text("Set how long a presence ping stays active before the user is considered stale.")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AegisColors.mutedText)
+                    }
+
+                    HStack {
+                        if let message = viewModel.saveMessage {
+                            Text(message)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(message == "Settings saved" ? AegisColors.activeGreen : Color.red)
+                        }
+                        Spacer()
+                        Button {
+                            Task { await viewModel.save(sessionStore: sessionStore) }
+                        } label: {
+                            Text(viewModel.isSaving ? "Saving..." : "Save Settings")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 18)
+                                .frame(height: 34)
+                                .background(AegisColors.teal)
+                                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isSaving)
+                    }
+                }
+            }
+            .frame(maxWidth: 860)
+
+            Spacer()
+        }
+        .screenPadding()
+        .task {
+            if viewModel.state == .idle {
+                await viewModel.load(sessionStore: sessionStore)
+            }
+        }
+    }
+}
+
+private struct SettingsSubpanel<Content: View>: View {
+    let title: String
+    let icon: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 17) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(AegisColors.teal)
+            content
         }
         .padding(20)
-        .glassPanel()
+        .background(Color.white.opacity(0.78))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(AegisColors.panelBorder, lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+    }
+}
+
+private struct SessionThresholdRow: View {
+    let title: String
+    @Binding var config: SessionConfig
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .frame(width: 110, alignment: .leading)
+            TimeField(text: $config.startTime)
+            SessionPill(text: title.hasPrefix("AM") ? "AM" : "PM")
+            Text("to")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AegisColors.mutedText)
+            TimeField(text: $config.endTime)
+            SessionPill(text: title.hasPrefix("AM") ? "AM" : "PM")
+            Spacer()
+        }
+    }
+}
+
+private struct TimeField: View {
+    @Binding var text: String
+
+    var body: some View {
+        TextField("00:00:00", text: $text)
+            .textFieldStyle(.plain)
+            .font(.system(size: 12, weight: .semibold))
+            .multilineTextAlignment(.center)
+            .frame(width: 88, height: 25)
+            .background(Color.black.opacity(0.06))
+            .clipShape(Capsule())
+    }
+}
+
+private struct SessionPill: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(AegisColors.teal)
+            .frame(width: 49, height: 25)
+            .background(Color.black.opacity(0.04))
+            .clipShape(Capsule())
+    }
+}
+
+private struct ComingSoonView: View {
+    let title: String
+    let icon: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 34) {
+            Text(title)
+                .screenTitle()
+
+            WhitePanel {
+                VStack(spacing: 16) {
+                    Image(systemName: icon)
+                        .font(.system(size: 38, weight: .semibold))
+                        .foregroundStyle(AegisColors.teal)
+                    Text("\(title) is coming soon")
+                        .font(.system(size: 18, weight: .bold))
+                    Text("This UI is reserved for a later backend-supported release.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AegisColors.mutedText)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: 620, maxHeight: 260)
+
+            Spacer()
+        }
+        .screenPadding()
+    }
+}
+
+private struct WhitePanel<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .padding(20)
+            .background(Color.white.opacity(0.94))
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(Color.white.opacity(0.85), lineWidth: 1)
+            }
+            .shadow(color: AegisColors.cardShadow, radius: 5, x: 0, y: 2)
+    }
+}
+
+private struct DateChip: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "calendar")
+            Text(text)
+            Image(systemName: "chevron.down")
+        }
+        .font(.system(size: 13, weight: .bold))
+        .foregroundStyle(.black)
+        .padding(.horizontal, 13)
+        .frame(height: 34)
+        .background(Color.white.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+}
+
+private struct SearchField: View {
+    @Binding var text: String
+    let placeholder: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Color.gray)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 30)
+        .background(Color.white)
+        .clipShape(Capsule())
+    }
+}
+
+private struct MetricIcon: View {
+    let symbol: String
+    let color: Color
+    let background: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(background)
+            Image(systemName: symbol)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(color)
+        }
+        .frame(width: 44, height: 44)
+    }
+}
+
+private struct MetricCard: View {
+    let icon: String
+    let iconColor: Color
+    let iconBackground: Color
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(iconBackground.opacity(0.90))
+                Image(systemName: icon)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(iconColor)
+            }
+            .frame(width: 66, height: 66)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.black)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text(value)
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(.black)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 23)
+        .frame(height: 104)
+        .background(Color.white.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 }
 
@@ -465,367 +1138,118 @@ private struct LegendItem: View {
             Circle()
                 .fill(color)
                 .frame(width: 9, height: 9)
-
             Text(label)
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.black)
         }
     }
 }
 
-private struct RadarPlot: View {
-    let room: RoomSnapshot
+private struct TableHeader: View {
+    let columns: [(String, CGFloat)]
 
     var body: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            let plotRect = CGRect(
-                x: size.width * 0.055,
-                y: size.height * 0.085,
-                width: size.width * 0.90,
-                height: size.height * 0.82
-            )
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.black.opacity(0.085))
-
-                Path { path in
-                    path.addRoundedRect(in: plotRect, cornerSize: CGSize(width: 8, height: 8))
-                }
-                .stroke(Color(red: 0.30, green: 0.36, blue: 0.60).opacity(0.82), lineWidth: 1)
-
-                ForEach(room.radarPoints) { point in
-                    Circle()
-                        .fill(point.status == .active ? AegisColors.activeGreen : AegisColors.inactiveYellow)
-                        .frame(width: 18, height: 18)
-                        .position(x: size.width * point.x, y: size.height * point.y)
-                }
-
-                ForEach(room.beacons) { beacon in
-                    BeaconMarker(beacon: beacon)
-                        .position(x: size.width * beacon.x, y: size.height * beacon.y)
-                }
-            }
-        }
-    }
-}
-
-private struct BeaconMarker: View {
-    let beacon: Beacon
-
-    var body: some View {
-        VStack(spacing: 2) {
-            if beacon.y < 0.5 {
-                label
-            }
-
-            Circle()
-                .fill(AegisColors.beaconBlue)
-                .overlay(Circle().stroke(Color.black.opacity(0.35), lineWidth: 1.2))
-                .frame(width: 18, height: 18)
-
-            if beacon.y >= 0.5 {
-                label
-            }
-        }
-    }
-
-    private var label: some View {
-        Text(beacon.label)
-            .font(.system(size: 8, weight: .bold))
-            .foregroundStyle(Color(red: 0.26, green: 0.30, blue: 0.56))
-    }
-}
-
-private struct MetricsColumn: View {
-    let room: RoomSnapshot
-
-    var body: some View {
-        VStack(spacing: 21) {
-            MetricCard(
-                icon: "thermometer.medium",
-                iconColor: Color(red: 0.93, green: 0.42, blue: 0.49),
-                iconBackground: Color(red: 1.0, green: 0.68, blue: 0.72),
-                title: "Room Temperature",
-                value: room.temperature
-            )
-
-            MetricCard(
-                icon: "humidity.fill",
-                iconColor: Color(red: 0.17, green: 0.58, blue: 0.70),
-                iconBackground: Color(red: 0.66, green: 0.88, blue: 0.93),
-                title: "Humidity",
-                value: room.humidity
-            )
-
-            MetricCard(
-                icon: "person.3.fill",
-                iconColor: Color(red: 0.24, green: 0.60, blue: 0.22),
-                iconBackground: Color(red: 0.69, green: 0.91, blue: 0.66),
-                title: "People in Room",
-                value: "\(room.peopleCount)"
-            )
-        }
-    }
-}
-
-private struct MetricCard: View {
-    let icon: String
-    let iconColor: Color
-    let iconBackground: Color
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(spacing: 24) {
-            ZStack {
-                Circle()
-                    .fill(iconBackground.opacity(0.86))
-
-                Image(systemName: icon)
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(iconColor)
-            }
-            .frame(width: 62, height: 62)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(.system(size: 16, weight: .bold))
+        HStack(spacing: 0) {
+            ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
+                Text(column.0)
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.black)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                Text(value)
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.black)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 28)
-        .frame(height: 100)
-        .glassPanel()
-    }
-}
-
-private struct OccupantsTable: View {
-    let room: RoomSnapshot
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: "person.2.fill")
-                    .font(.system(size: 15, weight: .bold))
-
-                Text("Current Occupants")
-                    .font(.system(size: 16, weight: .bold))
-
-                Spacer()
-            }
-            .foregroundStyle(.black)
-            .frame(height: 50)
-            .padding(.horizontal, 22)
-
-            Rectangle()
-                .fill(Color.white.opacity(0.28))
-                .frame(height: 1)
-
-            VStack(spacing: 10) {
-                OccupantRow(
-                    learner: "Learner",
-                    session: "Learner's Session",
-                    duration: "Duration",
-                    status: "Status",
-                    isHeader: true
-                )
-
-                ForEach(room.occupants) { occupant in
-                    OccupantRow(
-                        learner: occupant.learner,
-                        session: occupant.session,
-                        duration: occupant.duration,
-                        status: occupant.status,
-                        isHeader: false
+                    .frame(
+                        minWidth: column.1 == .infinity ? 0 : column.1,
+                        maxWidth: column.1 == .infinity ? .infinity : column.1,
+                        alignment: .leading
                     )
-                }
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 16)
-
-            Spacer(minLength: 0)
         }
-        .glassPanel()
+        .padding(.horizontal, 13)
+        .frame(height: 42)
+        .background(AegisColors.tableHeader)
     }
 }
 
-private struct OccupantRow: View {
-    let learner: String
-    let session: String
-    let duration: String
-    let status: String
-    let isHeader: Bool
+private struct TableMessage: View {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
 
     var body: some View {
-        HStack(spacing: 14) {
-            Text(learner)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(session)
-                .frame(width: 190, alignment: .leading)
-
-            Text(duration)
-                .frame(width: 112, alignment: .leading)
-
-            Text(status)
-                .frame(width: 96, alignment: .leading)
-        }
-        .font(.system(size: 14, weight: isHeader ? .bold : .medium))
-        .foregroundStyle(.black)
-        .lineLimit(1)
+        Text(message)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(AegisColors.mutedText)
+            .frame(maxWidth: .infinity, minHeight: 120)
     }
 }
 
-private struct SettingsView: View {
-    @State private var refreshInterval = 5.0
-    @State private var liveUpdatesEnabled = true
-    @State private var selectedEnvironment = "Development"
+private struct ErrorBanner: View {
+    let message: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            TopBar(title: "Settings", textColor: AegisColors.ink)
-
-            HStack(alignment: .top, spacing: 22) {
-                VStack(alignment: .leading, spacing: 18) {
-                    SettingsPanelTitle("API Configuration")
-
-                    VStack(spacing: 14) {
-                        SettingsField(label: "Environment") {
-                            Picker("", selection: $selectedEnvironment) {
-                                Text("Development").tag("Development")
-                                Text("Staging").tag("Staging")
-                                Text("Production").tag("Production")
-                            }
-                            .labelsHidden()
-                            .frame(width: 180)
-                        }
-
-                        SettingsTextRow(label: "Base URL", value: "Waiting for backend")
-                        SettingsTextRow(label: "Auth Method", value: "Bearer token")
-                    }
-                }
-                .settingsCard(width: 430)
-
-                VStack(alignment: .leading, spacing: 18) {
-                    SettingsPanelTitle("Live Data")
-
-                    Toggle("Enable live updates", isOn: $liveUpdatesEnabled)
-                        .toggleStyle(.switch)
-                        .font(.system(size: 15, weight: .semibold))
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Refresh Interval")
-                                .font(.system(size: 15, weight: .semibold))
-                            Spacer()
-                            Text("\(Int(refreshInterval))s")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(AegisColors.teal)
-                        }
-
-                        Slider(value: $refreshInterval, in: 2...30, step: 1)
-                    }
-                }
-                .settingsCard(width: 330)
-            }
-
-            Spacer()
-        }
-        .padding(.top, 57)
-        .padding(.leading, 30)
-        .padding(.trailing, 35)
-        .padding(.bottom, 32)
-        .background(AegisColors.dashboardBackground)
-    }
-}
-
-private struct SettingsPanelTitle: View {
-    let title: String
-
-    init(_ title: String) {
-        self.title = title
-    }
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 20, weight: .bold))
-            .foregroundStyle(Color.black)
-    }
-}
-
-private struct SettingsField<Content: View>: View {
-    let label: String
-    let content: Content
-
-    init(label: String, @ViewBuilder content: () -> Content) {
-        self.label = label
-        self.content = content()
-    }
-
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(AegisColors.mutedText)
-
-            Spacer()
-
-            content
-        }
-    }
-}
-
-private struct SettingsTextRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        SettingsField(label: label) {
-            Text(value)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.black)
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-                .background(Color.black.opacity(0.045))
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        }
+        Text(message)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Color(red: 0.72, green: 0.12, blue: 0.12))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(red: 1.0, green: 0.92, blue: 0.92))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
 
 private extension View {
-    func settingsCard(width: CGFloat) -> some View {
+    func screenTitle() -> some View {
         self
-            .padding(24)
-            .frame(width: width, alignment: .topLeading)
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .shadow(color: AegisColors.cardShadow.opacity(0.30), radius: 6, x: 0, y: 2)
+            .font(.system(size: 27, weight: .bold))
+            .foregroundStyle(.black)
     }
 
-    func glassPanel() -> some View {
+    func screenPadding() -> some View {
         self
-            .background(Color.white.opacity(0.24))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.88), lineWidth: 1.1)
-            }
+            .padding(.top, 42)
+            .padding(.leading, 28)
+            .padding(.trailing, 30)
+            .padding(.bottom, 30)
     }
+
+    func tableCell(width: CGFloat? = nil, maxWidth: CGFloat? = nil, alignment: Alignment = .center) -> some View {
+        self
+            .font(.system(size: 12, weight: .medium))
+            .lineLimit(1)
+            .frame(
+                minWidth: width ?? 0,
+                maxWidth: maxWidth ?? width ?? .infinity,
+                alignment: alignment
+            )
+            .padding(.horizontal, 13)
+    }
+}
+
+private func statusColor(_ status: String) -> Color {
+    let lowered = status.lowercased()
+    if lowered.contains("active") || lowered.contains("on time") || lowered.contains("checked in") || lowered.contains("early") {
+        return AegisColors.activeGreen
+    }
+    if lowered.contains("late") || lowered.contains("running") {
+        return AegisColors.inactiveYellow
+    }
+    return AegisColors.mutedText
+}
+
+private func formatDateTime(_ iso: String?) -> String {
+    guard let iso, !iso.isEmpty else { return "-" }
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let fallback = ISO8601DateFormatter()
+    let date = formatter.date(from: iso) ?? fallback.date(from: iso)
+    guard let date else { return iso }
+    let output = DateFormatter()
+    output.dateFormat = "HH:mm"
+    return output.string(from: date)
 }
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
-            .frame(width: 1342, height: 856)
+            .frame(width: 1280, height: 820)
     }
 }
