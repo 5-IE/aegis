@@ -9,13 +9,20 @@ beforeAll(() => {
   process.env.DB_NAME = 'AEGIS';
 });
 
-vi.mock('../../src/db/queries/roomQueries.js', () => ({ listRooms: vi.fn(), findRoomById: vi.fn() }));
+vi.mock('../../src/db/queries/roomQueries.js', () => ({
+  listRooms: vi.fn(),
+  findRoomById: vi.fn(),
+  insertRoom: vi.fn(),
+  updateRoomName: vi.fn(),
+  deleteRoom: vi.fn(),
+}));
 vi.mock('../../src/db/queries/presenceQueries.js', () => ({
   insertPresenceLog: vi.fn(),
   firstPingForUserInWindow: vi.fn(),
   lastPingForUserInWindow: vi.fn(),
   firstAndLastPingBulk: vi.fn(),
   currentRoomPerUser: vi.fn(),
+  countPresenceLogsForRoom: vi.fn(),
 }));
 vi.mock('../../src/db/queries/userQueries.js', () => ({
   findUserById: vi.fn(),
@@ -137,5 +144,62 @@ describe('getRoomAdditionalData', () => {
     expect(r.room_temperature).toBe(24.5);
     expect(r.humidity).toBe(62);
     expect(r.people_in_room).toBe(2);
+  });
+});
+
+describe('createRoomService', () => {
+  it('creates a room and returns the resource', async () => {
+    const { svc, rq } = await load();
+    (rq.insertRoom as any).mockResolvedValue(42);
+    (rq.findRoomById as any).mockResolvedValue({ id_room: 42, name: 'Lab X' });
+    const r = await svc.createRoomService({ name: 'Lab X' });
+    expect(r).toEqual({ id: 42, name: 'Lab X' });
+    expect(rq.insertRoom).toHaveBeenCalledWith('Lab X');
+  });
+});
+
+describe('updateRoomService', () => {
+  it('updates and returns the fresh resource', async () => {
+    const { svc, rq } = await load();
+    (rq.findRoomById as any).mockResolvedValueOnce({ id_room: 5, name: 'Old' });
+    (rq.findRoomById as any).mockResolvedValueOnce({ id_room: 5, name: 'New' });
+    const r = await svc.updateRoomService(5, { name: 'New' });
+    expect(r).toEqual({ id: 5, name: 'New' });
+    expect(rq.updateRoomName).toHaveBeenCalledWith(5, 'New');
+  });
+
+  it('throws not_found when room missing', async () => {
+    const { svc, rq } = await load();
+    (rq.findRoomById as any).mockResolvedValue(null);
+    await expect(svc.updateRoomService(999, { name: 'X' })).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('throws invalid_request on empty patch', async () => {
+    const { svc } = await load();
+    await expect(svc.updateRoomService(5, {})).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+});
+
+describe('deleteRoomService', () => {
+  it('deletes when no presence logs exist', async () => {
+    const { svc, rq, pq } = await load();
+    (rq.findRoomById as any).mockResolvedValue({ id_room: 5, name: 'Empty Lab' });
+    (pq.countPresenceLogsForRoom as any).mockResolvedValue(0);
+    await svc.deleteRoomService(5);
+    expect(rq.deleteRoom).toHaveBeenCalledWith(5);
+  });
+
+  it('throws not_found when room missing', async () => {
+    const { svc, rq } = await load();
+    (rq.findRoomById as any).mockResolvedValue(null);
+    await expect(svc.deleteRoomService(999)).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('throws conflict when presence logs exist', async () => {
+    const { svc, rq, pq } = await load();
+    (rq.findRoomById as any).mockResolvedValue({ id_room: 5, name: 'Active Lab' });
+    (pq.countPresenceLogsForRoom as any).mockResolvedValue(42);
+    await expect(svc.deleteRoomService(5)).rejects.toMatchObject({ code: 'conflict' });
+    expect(rq.deleteRoom).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { AppError } from '../lib/errors.js';
-import { listRooms, findRoomById } from '../db/queries/roomQueries.js';
-import { currentRoomPerUser, firstPingForUserInWindow } from '../db/queries/presenceQueries.js';
+import { listRooms, findRoomById, insertRoom, updateRoomName, deleteRoom } from '../db/queries/roomQueries.js';
+import { currentRoomPerUser, firstPingForUserInWindow, countPresenceLogsForRoom } from '../db/queries/presenceQueries.js';
 import { findUserById, UserRow } from '../db/queries/userQueries.js';
 import { findByUserAndDate } from '../db/queries/attendanceHistoryQueries.js';
 import { getSystemConfig } from './configService.js';
@@ -81,4 +81,38 @@ export async function getRoomAdditionalData(
   await ensureRoomExists(roomId);
   const rows = await currentUsersInRoom(roomId, now);
   return { room_temperature: 24.5, humidity: 62, people_in_room: rows.length };
+}
+
+export async function createRoomService(input: { name: string }): Promise<{ id: number; name: string }> {
+  const id = await insertRoom(input.name);
+  const row = await findRoomById(id);
+  if (!row) throw new AppError('internal_error', 'Room created but could not be read back');
+  return { id: row.id_room, name: row.name };
+}
+
+export async function updateRoomService(
+  id: number,
+  patch: { name?: string },
+): Promise<{ id: number; name: string }> {
+  if (Object.keys(patch).length === 0) {
+    throw new AppError('invalid_request', 'Empty patch');
+  }
+  const existing = await findRoomById(id);
+  if (!existing) throw new AppError('not_found', 'Room not found');
+  if (patch.name !== undefined) {
+    await updateRoomName(id, patch.name);
+  }
+  const fresh = await findRoomById(id);
+  if (!fresh) throw new AppError('internal_error', 'Room updated but could not be read back');
+  return { id: fresh.id_room, name: fresh.name };
+}
+
+export async function deleteRoomService(id: number): Promise<void> {
+  const existing = await findRoomById(id);
+  if (!existing) throw new AppError('not_found', 'Room not found');
+  const logCount = await countPresenceLogsForRoom(id);
+  if (logCount > 0) {
+    throw new AppError('conflict', `Cannot delete room with recorded presence — has ${logCount} log entries`);
+  }
+  await deleteRoom(id);
 }
