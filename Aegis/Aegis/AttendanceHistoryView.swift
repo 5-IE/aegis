@@ -15,16 +15,21 @@ struct AttendanceHistoryView: View {
             HStack {
                 Button(action: { dismiss() }) {
                     Image(systemName: "chevron.left")
-                        .font(.headline)
-                        .foregroundColor(Theme.textPrimary)
+                        .font(.system(size:20,weight:.bold))
+                        .foregroundColor(.black)
+                        .frame(width: 40, height: 40)
+                        .background(Color.white)
+                        .clipShape(Circle())
                 }
                 Spacer()
                 Text("Attendance History")
-                    .font(.headline)
-                    .foregroundColor(Theme.textPrimary)
+                    .font(.system(size: 22, weight:.semibold))
+                    .foregroundColor(.white)
                 Spacer()
                 // invisible spacer to balance the back button
-                Image(systemName: "chevron.left").opacity(0)
+                Circle()
+                    .frame(width: 40, height: 40)
+                    .opacity(0)
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -34,14 +39,14 @@ struct AttendanceHistoryView: View {
             HStack(spacing: 24) {
                 Button(action: { changeMonth(by: -1) }) {
                     Image(systemName: "chevron.left")
-                        .foregroundColor(Theme.primary)
+                        .foregroundColor(.white)
                 }
                 Text(monthLabel)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(Theme.primary)
+                    .font(.system(size: 22, weight:.medium))
+                    .foregroundColor(.white)
                 Button(action: { changeMonth(by: 1) }) {
                     Image(systemName: "chevron.right")
-                        .foregroundColor(Theme.primary)
+                        .foregroundColor(.white)
                 }
             }
             .padding(.vertical, 10)
@@ -51,16 +56,31 @@ struct AttendanceHistoryView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(SampleData.juneHistory.enumerated()), id: \.element.id) { index, record in
                         AttendanceRow(record: record)
-                            .padding(.horizontal, 20)
+                            .padding(.horizontal, 22)
+
                         if index < SampleData.juneHistory.count - 1 {
-                            Divider().padding(.leading, 20)
+                            Divider()
                         }
                     }
                 }
-                .padding(.vertical, 4)
+
+                .padding(.vertical, 10)
+                .background(Theme.cardBackground.opacity(0.85))
+                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .shadow(color: Color.black.opacity(0.25), radius: 18, x: 0, y: 8)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 20)
             }
         }
-        .background(Theme.screenBackground.ignoresSafeArea())
+        .background(
+            LinearGradient(
+                colors: [Theme.historyBackgroundStart, Theme.historyBackgroundEnd],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+        )
         .navigationBarHidden(true)
     }
 

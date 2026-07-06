@@ -35,9 +35,19 @@ enum Theme {
     // Shape
     static let cornerRadius: CGFloat = 16
     static let fieldCornerRadius: CGFloat = 12
-    
-    //Symbols
-    static let statisticsIcon = Color(hex:0xA9C4CE)
+
+    // Typography
+    enum Fonts {
+        static let h1 = Font.system(size: 30, weight: .bold)
+        static let h2 = Font.system(size: 16, weight: .bold)
+        static let b1 = Font.system(size: 14, weight: .semibold)
+        static let b2 = Font.system(size: 12, weight: .regular)
+        static let statIcons = Font.system(size: 20, weight: .regular)
+        static let badgeIcons = Font.system(size: 30, weight:.regular)
+    }
+
+    // Symbols
+    static let statisticsIcon = Color(hex: 0xA9C4CE)
 }
 
 private extension Color {

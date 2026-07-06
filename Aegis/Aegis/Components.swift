@@ -3,20 +3,32 @@ import SwiftUI
 // MARK: - Status Badge (e.g. "On-time", "Late", "Leave")
 struct StatusBadge: View {
     let status: AttendanceStatus
-
+    var icon: String? = nil
+    
     var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(status.color)
-                .frame(width: 6, height: 6)
-            Text(status.rawValue)
-                .font(.caption2.weight(.semibold))
+        HStack(spacing: 2) {
+            Image(systemName: icon ?? defaultIcon)
+                .font(.system(size: 14, weight: .bold))
                 .foregroundColor(status.color)
+            Text(status.rawValue)
+                .font(Theme.Fonts.b2)
+                .foregroundColor(status.color)
+                .frame(width: 54, alignment:.center)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .frame(width: 78, height: 23)
         .background(status.backgroundColor)
         .clipShape(Capsule())
+    }
+
+    private var defaultIcon: String {
+        switch status {
+        case .onTime:
+            return "checkmark.circle.fill"
+        case .late:
+            return "clock.fill"
+        case .leave:
+            return "xmark.circle.fill"
+        }
     }
 }
 
@@ -27,22 +39,19 @@ struct StatCard: View {
     let icon: String
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 2) {
             Image(systemName: icon)
-                            .font(.title2)
-                            .foregroundColor(Theme.statisticsIcon)
+                .font(.system(size: 20, weight: .regular))
+                .foregroundColor(Theme.statisticsIcon)
             Text(value)
-                .font(.title2.bold())
+                .font(Theme.Fonts.h1)
                 .foregroundColor(Theme.textPrimary)
             Text(label)
-                .font(.caption)
+                .font(Theme.Fonts.b2)
                 .foregroundColor(Theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(Theme.cardBackground)
-        .cornerRadius(Theme.cornerRadius)
-        .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 2)
+        .frame(height: 118)
     }
 }
 
@@ -52,18 +61,119 @@ struct AttendanceRow: View {
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(record.dateLabel)
-                    .font(.subheadline.weight(.semibold))
+                    .font(Theme.Fonts.b1)
                     .foregroundColor(Theme.textPrimary)
                 Text(record.timeRange)
-                    .font(.caption)
+                    .font(Theme.Fonts.b2)
                     .foregroundColor(Theme.textSecondary)
             }
             Spacer()
             StatusBadge(status: record.status)
         }
-        .padding(.vertical, 12)
+        .frame(minHeight: 54)
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Today's Attendance Card
+struct TodayAttendanceCard: View {
+    let status: TodayAttendanceStatus
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 20) {
+            TodayAttendanceStatusIcon(status: status)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(status.title)
+                    .font(Theme.Fonts.h2)
+                    .foregroundColor(Theme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+
+                Text(status.message)
+                    .font(Theme.Fonts.b2)
+                    .foregroundColor(Theme.textSecondary)
+                    .lineLimit(2)
+
+                Text(status.detail)
+                    .font(Theme.Fonts.b2)
+                    .foregroundColor(status.accentColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+
+            Spacer(minLength: 6)
+
+            TodayAttendanceIllustration(status: status)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 16)
+        .padding(.vertical, 10)
+        .frame(height: 95)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            status.backgroundColor,
+                            status.backgroundColor.opacity(0.72),
+                            Theme.cardBackground.opacity(0.9)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .overlay(alignment: .trailing) {
+                    Circle()
+                        .fill(status.accentColor.opacity(0.18))
+                        .frame(width: 88, height: 88)
+                        .blur(radius: 16)
+                        .offset(x: 18)
+                }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .shadow(color: .black.opacity(0.16), radius: 7, x: 0, y: 3)
+    }
+}
+
+struct TodayAttendanceGrid: View {
+    let statuses: [TodayAttendanceStatus]
+    private let columns = [
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 14) {
+            ForEach(statuses) { status in
+                TodayAttendanceCard(status: status)
+            }
+        }
+    }
+}
+
+private struct TodayAttendanceStatusIcon: View {
+    let status: TodayAttendanceStatus
+
+    var body: some View {
+                Image(systemName: status.statusIcon)
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(status.accentColor)
+            
+    }
+}
+
+private struct TodayAttendanceIllustration: View {
+    let status: TodayAttendanceStatus
+
+    var body: some View {
+        Image(status.illustrationAsset)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 100, height: 120)
+            .accessibilityHidden(true)
     }
 }
 
@@ -134,4 +244,12 @@ struct IconTextField: View {
                 .stroke(Color.black.opacity(0.08), lineWidth: 1)
         )
     }
+}
+
+#Preview("Today's Attendance States") {
+    ScrollView {
+        TodayAttendanceGrid(statuses: SampleData.todayAttendanceOptions)
+            .padding(20)
+    }
+    .background(Theme.screenBackground)
 }
