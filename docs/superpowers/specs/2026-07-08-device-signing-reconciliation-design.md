@@ -34,8 +34,8 @@ header. The server rebuilds the identical string and verifies.
 
 | Piece | Current | Target |
 |---|---|---|
-| Signing scheme (iOS) | `sign(serverChallenge:)` — signs an arbitrary string | `signRequest(method:path:body:)` — signs the canonical payload |
-| iOS crypto API | Security framework (`SecKeyCreateRandomKey`) | CryptoKit (`SecureEnclave.P256.Signing.PrivateKey`) |
+| Signing scheme (iOS) — *deferred* | `sign(serverChallenge:)` — signs an arbitrary string | `signRequest(method:path:body:)` — signs the canonical payload (follow-up PR) |
+| iOS crypto API — *deferred* | Security framework (`SecKeyCreateRandomKey`) | CryptoKit (`SecureEnclave.P256.Signing.PrivateKey`) (follow-up PR) |
 | Public key format | raw X9.63 (`SecKeyCopyExternalRepresentation`) | **raw X9.63** (unchanged decision) — `publicKey.x963Representation` |
 | Server key import | `type: 'spki'` (expects SPKI DER) | wrap raw X9.63 point into SPKI DER, then verify |
 | `USER.device_public_key` | `VARCHAR(64)` (migration 0007) | `VARCHAR(256)` (new migration 0008) |
@@ -118,18 +118,21 @@ Length cap `> 64` → `> 256`; message updated.
 Insert `requireSignature` after `requireRole('learner')`, before
 `presenceRateLimit`.
 
-### Client — `Aegis/Aegis/Services/CryptoManager.swift` (rewrite)
+### Client — iOS (DEFERRED to a follow-up PR)
 
-- `SecureEnclave.P256.Signing.PrivateKey`, persist `dataRepresentation` in
-  Keychain, reload on launch.
-- `publicKeyBase64() -> String?` → `privateKey.publicKey.x963Representation.base64EncodedString()`.
-- `signRequest(method:path:body:) throws -> (xTimestamp: String, xSignature: String)`
-  building the canonical payload; signature `.derRepresentation.base64EncodedString()`.
+The iOS signing client is **out of scope for this PR**. The app has no presence
+request today (no `sendPresence`, no presence code anywhere in
+`Aegis/Aegis/**/*.swift`), and `HttpService` is a single generic `request()`.
+Building the signing client now would sign a request that does not exist and
+would churn `CryptoManager` (breaking `RegisterViewModel`) for no runtime
+benefit. The backend enforces signatures regardless of client readiness.
 
-### Client — `Aegis/Aegis/Services/ApiService` (modify)
-
-Attach `X-Timestamp` / `X-Signature` to the presence request using
-`signRequest`, with `body = Data()` when there is no body.
+The follow-up PR will: rewrite `CryptoManager` to CryptoKit
+(`publicKeyBase64()` via `x963Representation`, `signRequest(method:path:body:)`),
+update `RegisterViewModel` to the new API and actually call `registerDevice`,
+add a `sendPresence` request, and inject `X-Timestamp`/`X-Signature` headers in
+`HttpService.request()`. The cross-language vector below is the target it must
+match.
 
 ## Error Responses
 
@@ -155,7 +158,8 @@ Attach `X-Timestamp` / `X-Signature` to the presence request using
   - path rebuilt from `originalUrl` (mount-prefixed request verifies)
 - **`presence.test.ts`** (existing): update `buildTestApp` to include the
   `rawBody` verify hook and a signed request helper so existing cases pass with
-  the middleware in place; add one unsigned-request → 403 case.
+  the middleware in place; add one unsigned-request case (missing headers →
+  **400 `invalid_request`**) and one no-key-registered case (→ 403 `forbidden`).
 - **Cross-language vector:** a fixed (privateKey, payload) → signature vector
   documented so the iOS side can be checked against the server.
 

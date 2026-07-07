@@ -4,9 +4,11 @@
 
 **Goal:** Bind a learner's `POST /api/v1/presence` request to the physical device that registered, by verifying a P-256 ECDSA signature over a canonical payload on top of the existing JWT auth.
 
-**Architecture:** The iOS client (CryptoKit, Secure Enclave) signs `METHOD\nPATH\nTIMESTAMP\nSHA256_HEX(body)` and sends `X-Timestamp` + `X-Signature`. A new Express middleware `requireSignature` rebuilds the identical string and verifies it against the device public key stored on the `USER` row. The public key travels as a raw X9.63 point (base64); the server wraps it into SPKI DER with a fixed 26-byte header before verifying.
+**Architecture:** A client (CryptoKit, Secure Enclave) signs `METHOD\nPATH\nTIMESTAMP\nSHA256_HEX(body)` and sends `X-Timestamp` + `X-Signature`. A new Express middleware `requireSignature` rebuilds the identical string and verifies it against the device public key stored on the `USER` row. The public key travels as a raw X9.63 point (base64); the server wraps it into SPKI DER with a fixed 26-byte header before verifying.
 
-**Tech Stack:** Node 20 / TypeScript / Express 4 / MySQL (mysql2) / Vitest / Node `crypto`. Client: Swift / CryptoKit.
+**Scope:** This PR is **backend only**. The iOS signing client is deferred (Task 5) — the iOS app has no presence request yet, so there is nothing to sign there today. The backend fully enforces signatures regardless.
+
+**Tech Stack:** Node 20 / TypeScript / Express 4 / MySQL (mysql2) / Vitest / Node `crypto`.
 
 ## Global Constraints
 
@@ -577,7 +579,7 @@ describe('POST /presence', () => {
     expect(svc.recordPresence).toHaveBeenCalledWith(42, bodyObj);
   });
 
-  it('returns 403 when the request is not signed', async () => {
+  it('returns 400 when the request is not signed (missing headers)', async () => {
     const { app, token } = await buildTestApp();
     const q = await import('../../src/db/queries/userQueries.js');
     (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
@@ -586,6 +588,21 @@ describe('POST /presence', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ room_id: 3 });
     expect(res.status).toBe(400); // missing headers -> invalid_request
+  });
+
+  it('rejects battery_level out of range (400) on a signed request', async () => {
+    const { app, token } = await buildTestApp();
+    const q = await import('../../src/db/queries/userQueries.js');
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    const h = signHeaders({ room_id: 3, battery_level: 200 });
+    const res = await request(app)
+      .post('/api/v1/presence')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Timestamp', h['X-Timestamp'])
+      .set('X-Signature', h['X-Signature'])
+      .set('Content-Type', 'application/json')
+      .send(h.body);
+    expect(res.status).toBe(400);
   });
 
   it('rejects missing room_id (400) on a signed request', async () => {
@@ -629,13 +646,13 @@ Expected: FAIL — the router does not yet require a signature, so "returns 403 
 
 - [ ] **Step 3: Add the `rawBody` verify hook in `app.ts`**
 
-In `Aegis-Backend/src/app.ts`, replace line 22:
+In `Aegis-Backend/src/app.ts`, replace line 22. Note: body-parser types `verify` as `(req: http.IncomingMessage, ...)`, which is wider than `express.Request`; annotating the param as `express.Request` fails `tsc` under `strict` (contravariance). Cast inside the body instead:
 
 ```ts
   app.use(express.json({
     limit: '64kb',
-    verify: (req: express.Request & { rawBody?: Buffer }, _res, buf) => {
-      req.rawBody = buf;
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
     },
   }));
 ```
@@ -655,7 +672,7 @@ presenceRouter.post('/', requireAuth, requireRole('learner'), requireSignature, 
 - [ ] **Step 5: Run the presence tests — all pass**
 
 Run: `cd Aegis-Backend && npx vitest run tests/routes/presence.test.ts`
-Expected: PASS (4 passed).
+Expected: PASS (5 passed).
 
 - [ ] **Step 6: Run the full backend suite + lint**
 
@@ -671,148 +688,32 @@ git commit -m "feat: capture raw body and require device signature on POST /pres
 
 ---
 
-### Task 5: iOS — CryptoKit signing client
+### Task 5: iOS signing client — DEFERRED (out of scope for this PR)
 
-**Files:**
-- Rewrite: `Aegis/Aegis/Services/CryptoManager.swift`
-- Modify: `Aegis/Aegis/Services/ApiService` (attach headers to the presence request)
+**Decision:** This PR is **backend only, minimal iOS**. The iOS signing client is
+deferred to a follow-up PR. Rationale, confirmed by reading the actual iOS code:
 
-**Interfaces:**
-- Produces:
-  - `CryptoManager.shared.publicKeyBase64() -> String?` — base64 of `publicKey.x963Representation`.
-  - `CryptoManager.shared.signRequest(method: String, path: String, body: Data) throws -> (xTimestamp: String, xSignature: String)`.
-  - Private-key persistence: `dataRepresentation` stored in the Keychain under a fixed tag; reloaded on launch; generated once if absent.
+- There is **no presence request on iOS today** — a repo-wide grep for
+  `presence` / `room_id` / `position_x` across `Aegis/Aegis/**/*.swift` returns
+  nothing. `ApiService` (`Aegis/Aegis/Services/ApiService/ApiService.swift`) has
+  only login / refresh / register-device / profile / dashboard / history. There
+  is nothing to sign yet, so building the signing client now would be signing a
+  request that does not exist.
+- `HttpService` (`Aegis/Aegis/Services/ApiService/HttpService.swift`) is a single
+  generic `request()` — signing would hook there, not per-endpoint.
+- The existing `CryptoManager.swift` **compiles and works today**; leaving it
+  untouched keeps `RegisterViewModel.swift:24,30` (which calls
+  `generateDeviceKeyPair()` and `getPublicKeyBase64()`) valid. Rewriting it now
+  would break compilation with no presence request to justify the churn.
 
-> Note: iOS changes cannot be compiled or unit-tested in this environment (no Xcode/simulator). Verify by code review against the CryptoKit API and the cross-language vector from Task 6. Do NOT claim the client is "tested" — only reviewed.
+**No iOS files are changed in this PR.** The follow-up PR will: rewrite
+`CryptoManager` to CryptoKit (`publicKeyBase64()` via `x963Representation`,
+`signRequest(method:path:body:)`), update `RegisterViewModel` to the new API and
+actually call `apiService.registerDevice`, add a `sendPresence` request, and
+inject signature headers into `HttpService.request()`. The cross-language vector
+in Task 6 exists precisely so that follow-up work has a fixed target to match.
 
-- [ ] **Step 1: Rewrite `CryptoManager.swift`**
-
-Replace the whole file `Aegis/Aegis/Services/CryptoManager.swift`:
-
-```swift
-//
-//  CryptoManager.swift
-//  Aegis
-//
-
-import CryptoKit
-import Foundation
-import Security
-
-/// Device request signing using a P-256 key held in the Secure Enclave.
-/// The private key's dataRepresentation is stored in the Keychain and reloaded
-/// on launch; the public key is exported as a raw X9.63 point (base64) for the
-/// server, which wraps it into SPKI DER before verifying.
-final class CryptoManager {
-    static let shared = CryptoManager()
-    private init() {}
-
-    private let keychainAccount = "com.academytracker.devicekey"
-    private let keychainService = "com.academytracker.aegis"
-
-    // MARK: - Key lifecycle
-
-    /// Load the persisted Secure Enclave key, generating and storing one on first use.
-    private func loadOrCreateKey() throws -> SecureEnclave.P256.Signing.PrivateKey {
-        if let data = readKeyData() {
-            return try SecureEnclave.P256.Signing.PrivateKey(dataRepresentation: data)
-        }
-        let key = try SecureEnclave.P256.Signing.PrivateKey()
-        try storeKeyData(key.dataRepresentation)
-        return key
-    }
-
-    /// Base64 of the raw X9.63 uncompressed public point, for /register-device.
-    func publicKeyBase64() -> String? {
-        guard let key = try? loadOrCreateKey() else { return nil }
-        return key.publicKey.x963Representation.base64EncodedString()
-    }
-
-    // MARK: - Signing
-
-    /// Build the canonical payload, sign it, and return the header values.
-    /// Canonical payload: METHOD\nPATH\nUNIX_TS\nSHA256_HEX(body)
-    func signRequest(
-        method: String,
-        path: String,
-        body: Data
-    ) throws -> (xTimestamp: String, xSignature: String) {
-        let key = try loadOrCreateKey()
-        let timestamp = Int(Date().timeIntervalSince1970)
-        let bodyHashHex = SHA256.hash(data: body)
-            .map { String(format: "%02x", $0) }
-            .joined()
-        let payload = "\(method)\n\(path)\n\(timestamp)\n\(bodyHashHex)"
-        let signature = try key.signature(for: Data(payload.utf8))
-        return (
-            xTimestamp: String(timestamp),
-            xSignature: signature.derRepresentation.base64EncodedString()
-        )
-    }
-
-    // MARK: - Keychain (stores the Secure Enclave key's dataRepresentation)
-
-    private func readKeyData() -> Data? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: keychainAccount,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }
-        return item as? Data
-    }
-
-    private func storeKeyData(_ data: Data) throws {
-        // Remove any stale entry first so this is idempotent.
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: keychainAccount,
-        ]
-        SecItemDelete(base as CFDictionary)
-        var attrs = base
-        attrs[kSecValueData as String] = data
-        attrs[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let status = SecItemAdd(attrs as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw NSError(domain: "CryptoManager", code: Int(status),
-                          userInfo: [NSLocalizedDescriptionKey: "Failed to store device key: \(status)"])
-        }
-    }
-}
-```
-
-- [ ] **Step 2: Find the presence request in `ApiService` and attach signature headers**
-
-Inspect `Aegis/Aegis/Services/ApiService` (it is a directory — find the file that builds the presence `POST`). At the point where the presence `URLRequest` is built and its body encoded, add:
-
-```swift
-// After: request.httpMethod = "POST"; request.httpBody = bodyData
-if let (ts, sig) = try? CryptoManager.shared.signRequest(
-    method: "POST",
-    path: "/api/v1/presence",
-    body: bodyData
-) {
-    request.setValue(ts, forHTTPHeaderField: "X-Timestamp")
-    request.setValue(sig, forHTTPHeaderField: "X-Signature")
-}
-```
-
-Ensure `bodyData` is the exact bytes assigned to `request.httpBody` (hash and body must match).
-
-- [ ] **Step 3: Review against the CryptoKit API**
-
-Confirm: `SecureEnclave.P256.Signing.PrivateKey().publicKey.x963Representation` yields a 65-byte point; `signature(for:).derRepresentation` is DER ECDSA; the signed `path` matches the server's `originalUrl` (`/api/v1/presence`).
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add Aegis/Aegis/Services/CryptoManager.swift Aegis/Aegis/Services/ApiService
-git commit -m "feat: sign presence requests with CryptoKit Secure Enclave key"
-```
+There are no steps in this task — it is a documented deferral. Proceed to Task 6.
 
 ---
 
@@ -899,7 +800,8 @@ git commit -m "docs: reconcile device-signing.md and add signing vector test"
 
 ## Self-Review Notes
 
-- **Spec coverage:** migration 0008 (T1), register cap (T1), `x963ToSpkiDer` (T2), `requireSignature` incl. path fix + all error branches (T3), rawBody hook + route wiring (T4), iOS CryptoKit rewrite + header attach (T5), doc reconciliation + cross-lang vector (T6). All spec sections mapped.
+- **Spec coverage:** migration 0008 (T1), register cap (T1), `x963ToSpkiDer` (T2), `requireSignature` incl. path fix + all error branches (T3), rawBody hook + route wiring (T4), doc reconciliation + cross-lang vector (T6). iOS client (T5) is an explicit deferral. All in-scope spec sections mapped.
 - **Ordering / blast-radius (verified):** a repo scan shows only `tests/routes/presence.test.ts` mounts the presence router and POSTs to it via supertest — Task 4 rewrites that file. Other files matching "presence" are service-layer tests that call `recordPresence`/`presenceService` directly and never hit the HTTP route, so they are unaffected. Task 4 Step 6 still runs the full suite as a backstop.
-- **iOS untestable here:** Task 5 is review-only; no compile/test claim.
-- **Types:** `x963ToSpkiDer(Buffer): Buffer`, `signRequest(method,path,body) -> (xTimestamp,xSignature)`, `publicKeyBase64() -> String?` used consistently across tasks.
+- **iOS deferred:** Task 5 changes no iOS files; existing `CryptoManager.swift` keeps compiling. The cross-language vector (T6) is the target for the follow-up PR.
+- **Error semantics:** an unsigned request (missing headers) is **400 `invalid_request`**, not 403. 403 `forbidden` is reserved for "no key registered" and "signature does not verify". Tests assert accordingly.
+- **Types:** `x963ToSpkiDer(Buffer): Buffer` used consistently across tasks.
