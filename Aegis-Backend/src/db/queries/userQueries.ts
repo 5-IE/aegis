@@ -11,6 +11,7 @@ export interface UserRow {
   last_name: string | null;
   session: 'AM' | 'PM';
   is_active: boolean;
+  device_public_key: string | null;
   created_at: Date;
 }
 
@@ -231,4 +232,11 @@ export async function countActiveAdmins(): Promise<number> {
     "SELECT COUNT(*) AS c FROM `USER` WHERE `role` = 'admin' AND `is_active` = TRUE",
   );
   return rows[0]?.c ?? 0;
+}
+
+export async function updateDevicePublicKey(id: number, devicePublicKey: string): Promise<void> {
+  await pool.query(
+    'UPDATE `USER` SET `device_public_key` = ? WHERE `id_user` = ?',
+    [devicePublicKey, id],
+  );
 }

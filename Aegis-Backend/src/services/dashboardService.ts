@@ -21,7 +21,7 @@ import {
 export async function getLearnerDashboard(
   userId: number,
   now: Date,
-): Promise<{ total_attendance: number; total_late: number; leave_taken: number; today_status: TodayStatus }> {
+): Promise<{ total_attendance: number; total_late: number; leave_taken: number; today_status: TodayStatus; check_in_at: Date | null }> {
   const user = await findUserById(userId);
   if (!user) throw new AppError('not_found', 'User not found');
 
@@ -38,7 +38,7 @@ export async function getLearnerDashboard(
   ]);
   const hasLeave = todayRow?.status === 'leave';
   const today_status = await computeTodayStatus(user.session, now, first, last, hasLeave);
-  return { total_attendance, total_late, leave_taken, today_status };
+  return { total_attendance, total_late, leave_taken, today_status, check_in_at: first };
 }
 
 export async function getAbsenceSummary(
