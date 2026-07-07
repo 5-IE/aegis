@@ -77,6 +77,12 @@ class DataStore {
         self.attendanceHistoryData = attendanceHistoryData.list
         return attendanceHistoryData
     }
+
+    func fetchAttendanceHistory(month: Int, year: Int) async throws -> ListResponse<[AttendanceData]> {
+        let attendanceHistoryData = try await apiService.fetchAttendanceHistory(month: month, year: year)
+        self.attendanceHistoryData = attendanceHistoryData.list
+        return attendanceHistoryData
+    }
     
 //    func addTransaction(_ transaction: Transaction) async throws {
 //        try await apiService.addTransaction(transaction)

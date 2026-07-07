@@ -23,7 +23,7 @@ class AttendanceHistoryViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            let response = try await store.fetchAttendanceHistoryByMonth(month: month, year: year)
+            let response = try await store.fetchAttendanceHistory(month: month, year: year)
             let attendanceHistoryData = response.list
             
             print(response)
