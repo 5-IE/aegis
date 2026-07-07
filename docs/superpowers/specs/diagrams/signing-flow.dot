@@ -1,0 +1,53 @@
+digraph signing_flow {
+  rankdir=TB;
+  bgcolor="white";
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=10];
+
+  labelloc="t";
+  label=<<b>Device Signing — Canonical Payload Flow</b>>;
+
+  subgraph cluster_client {
+    label=<<b>iOS Client (CryptoKit)</b>>;
+    style="rounded,filled";
+    fillcolor="#eef4ff";
+    color="#7aa2e3";
+    fontname="Helvetica";
+
+    c_key   [shape=box, style="rounded,filled", fillcolor="#ffffff", label="SecureEnclave.P256\nprivate key\n(persist dataRepresentation in Keychain)"];
+    c_reg   [shape=box, style="rounded,filled", fillcolor="#ffffff", label="On first launch:\nexport publicKey.x963Representation\n→ base64"];
+    c_build [shape=box, style="rounded,filled", fillcolor="#ffffff", label="Build canonical payload\nMETHOD\\nPATH\\nTIMESTAMP\\nSHA256_HEX(body)"];
+    c_sign  [shape=box, style="rounded,filled", fillcolor="#ffffff", label="signRequest(method,path,body)\n→ (X-Timestamp, X-Signature)"];
+
+    c_key -> c_reg;
+    c_key -> c_build [style=invis];
+    c_build -> c_sign;
+  }
+
+  subgraph cluster_server {
+    label=<<b>Node.js / TypeScript Server</b>>;
+    style="rounded,filled";
+    fillcolor="#eefaf0";
+    color="#6fbf7a";
+    fontname="Helvetica";
+
+    s_store  [shape=cylinder, style="filled", fillcolor="#ffffff", label="USER.device_public_key\nVARCHAR(256)  (migr. 0008)\nraw X9.63 base64"];
+    s_raw    [shape=box, style="rounded,filled", fillcolor="#ffffff", label="express.json({ verify })\ncapture req.rawBody"];
+    s_mw     [shape=box, style="rounded,filled", fillcolor="#ffffff", label="requireSignature middleware"];
+    s_ts     [shape=box, style="rounded,filled", fillcolor="#ffffff", label="1. Timestamp fresh? (±60s)"];
+    s_rebuild[shape=box, style="rounded,filled", fillcolor="#ffffff", label="2. Rebuild payload\nuse req.originalUrl split '?'\n(PATH FIX)"];
+    s_verify [shape=box, style="rounded,filled", fillcolor="#ffffff", label="3. Import raw X9.63 key\nverify ECDSA-SHA256"];
+    s_ok     [shape=box, style="rounded,filled", fillcolor="#d6f5d6", label="next()  → handler"];
+    s_err    [shape=box, style="rounded,filled", fillcolor="#f8d6d6", label="400 invalid_request /\n403 forbidden"];
+
+    s_raw -> s_mw -> s_ts -> s_rebuild -> s_verify;
+    s_verify -> s_ok   [label="valid"];
+    s_verify -> s_err  [label="invalid", color="#c0392b"];
+    s_ts -> s_err      [label="stale/missing", color="#c0392b"];
+    s_store -> s_verify [style=dashed, label="stored key"];
+  }
+
+  c_reg  -> s_store [label="POST /register-device\n{ device_public_key }  (JWT only)", color="#2c6cbf", fontcolor="#2c6cbf"];
+  c_sign -> s_raw   [label="POST /presence\nAuthorization + X-Timestamp + X-Signature", color="#2c6cbf", fontcolor="#2c6cbf"];
+}
