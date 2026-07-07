@@ -6,15 +6,6 @@ struct HomeView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundColor(.white)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.red.opacity(0.8).cornerRadius(8))
-            }
- 
             Theme.screenBackground
                 .ignoresSafeArea()
 
@@ -112,6 +103,9 @@ struct HomeView: View {
                     .frame(maxHeight: 360)
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.top, 24)
+            .padding(.bottom, 24)
             
             VStack() {
                 if let errorMessage = viewModel.errorMessage {
@@ -125,8 +119,7 @@ struct HomeView: View {
                             .frame(maxWidth: .infinity)
                             .background(Color.red.opacity(0.8).cornerRadius(Theme.cornerRadius))
                     }
-                        
-                        .padding()
+                    .padding()
                 }
                 Spacer()
             }
@@ -139,5 +132,6 @@ struct HomeView: View {
 }
 
 #Preview {
-    NavigationStack { HomeView().environment(DataStore(apiService: ApiService())) }
+    NavigationStack { HomeView()
+        .environment(DataStore(apiService: ApiService()))}
 }
