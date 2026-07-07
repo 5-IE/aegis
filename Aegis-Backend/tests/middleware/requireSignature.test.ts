@@ -145,4 +145,110 @@ describe('requireSignature', () => {
     await requireSignature(req, mockRes(), next);
     expect(next).toHaveBeenCalledWith();
   });
+
+  it('accepts a future timestamp within the clock-skew window', async () => {
+    const { requireSignature, q } = await load();
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    const req = signedReq({ timestamp: Math.floor(Date.now() / 1000) + 50 });
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('rejects a future timestamp beyond the clock-skew window', async () => {
+    const { requireSignature, q } = await load();
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    const req = signedReq({ timestamp: Math.floor(Date.now() / 1000) + 120 });
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect((next as any).mock.calls[0][0].code).toBe('invalid_request');
+  });
+
+  it('rejects a fractional timestamp with invalid_request', async () => {
+    const { requireSignature, q } = await load();
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    const req = signedReq({});
+    (req.headers as any)['x-timestamp'] = '1720300000.5';
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect((next as any).mock.calls[0][0].code).toBe('invalid_request');
+  });
+
+  it('rejects a numeric-prefixed timestamp like "123abc" with invalid_request', async () => {
+    const { requireSignature, q } = await load();
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    const req = signedReq({});
+    (req.headers as any)['x-timestamp'] = `${Math.floor(Date.now() / 1000)}abc`;
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect((next as any).mock.calls[0][0].code).toBe('invalid_request');
+  });
+
+  it('rejects a signature signed for a different path with forbidden', async () => {
+    const { requireSignature, q } = await load();
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    // Sign for /dashboard, then present the request as /presence.
+    const req = signedReq({ originalUrl: '/api/v1/dashboard' });
+    (req as any).originalUrl = '/api/v1/presence';
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect((next as any).mock.calls[0][0].code).toBe('forbidden');
+  });
+
+  it('rejects a signature signed for a different method with forbidden', async () => {
+    const { requireSignature, q } = await load();
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    const req = signedReq({ method: 'GET' });
+    (req as any).method = 'POST';
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect((next as any).mock.calls[0][0].code).toBe('forbidden');
+  });
+
+  it('hashes zero bytes when rawBody is absent (empty-body request)', async () => {
+    const { requireSignature, q } = await load();
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    // Sign an empty body, then simulate the verify hook not having run.
+    const req = signedReq({ rawBody: Buffer.alloc(0) });
+    delete (req as any).rawBody;
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('rejects a malformed base64 signature with forbidden (not a 500)', async () => {
+    const { requireSignature, q } = await load();
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    const req = signedReq({});
+    (req.headers as any)['x-signature'] = '!!!not-base64!!!';
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect((next as any).mock.calls[0][0].code).toBe('forbidden');
+  });
+
+  it('rejects a truncated (non-DER) signature with forbidden', async () => {
+    const { requireSignature, q } = await load();
+    (q.findUserById as any).mockResolvedValue({ id_user: 42, device_public_key: deviceKeyB64 });
+    const req = signedReq({});
+    (req.headers as any)['x-signature'] = 'AAAA'; // valid base64, not valid DER
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect((next as any).mock.calls[0][0].code).toBe('forbidden');
+  });
+
+  it('rejects a corrupt (off-curve) stored public key with forbidden, not 500', async () => {
+    const { requireSignature, q } = await load();
+    // 65-byte 0x04-prefixed point of all 0xff — passes x963ToSpkiDer shape check
+    // but is not on the P-256 curve, so createVerify throws internally.
+    const badPoint = Buffer.alloc(65, 0xff);
+    badPoint[0] = 0x04;
+    (q.findUserById as any).mockResolvedValue({
+      id_user: 42,
+      device_public_key: badPoint.toString('base64'),
+    });
+    const req = signedReq({});
+    const next = vi.fn() as unknown as NextFunction;
+    await requireSignature(req, mockRes(), next);
+    expect((next as any).mock.calls[0][0].code).toBe('forbidden');
+  });
 });

@@ -28,4 +28,15 @@ describe('x963ToSpkiDer', () => {
     bad[0] = 0x03; // compressed marker, not uncompressed
     expect(() => x963ToSpkiDer(bad)).toThrowError(/Malformed/);
   });
+
+  it('wraps a shape-valid but off-curve point (curve check is deferred to crypto)', () => {
+    // x963ToSpkiDer only validates length + leading byte, NOT curve membership.
+    // An all-0xff point has the right shape but is not on P-256, so the wrap
+    // succeeds while Node's crypto rejects it downstream.
+    const offCurve = Buffer.alloc(65, 0xff);
+    offCurve[0] = 0x04;
+    const spki = x963ToSpkiDer(offCurve);
+    expect(spki.length).toBe(91);
+    expect(() => createPublicKey({ key: spki, format: 'der', type: 'spki' })).toThrow();
+  });
 });
