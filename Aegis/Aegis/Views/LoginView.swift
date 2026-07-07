@@ -12,6 +12,7 @@ struct LoginView: View {
     @StateObject var viewModel = LoginViewModel()
 
     var body: some View {
+        
         ZStack {
             Theme.screenBackground.ignoresSafeArea()
 
@@ -80,10 +81,29 @@ struct LoginView: View {
 
                 Spacer(minLength: 24)
             }
+            
+            VStack() {
+                if let errorMessage = viewModel.errorMessage {
+                    Button(action: {
+                        viewModel.errorMessage = nil
+                    }) {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.red.opacity(0.8).cornerRadius(Theme.cornerRadius))
+                    }
+                        
+                        .padding()
+                }
+                Spacer()
+            }
         }
     }
 }
 
 #Preview {
-    LoginView()
+    NavigationStack { LoginView()
+        .environment(DataStore(apiService: ApiService())) }
 }

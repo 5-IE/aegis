@@ -1,23 +1,14 @@
 import SwiftUI
- 
+
 struct HomeView: View {
     @Environment(DataStore.self) private var dataStore
     @StateObject var viewModel = HomeViewModel()
- 
+
     var body: some View {
         ZStack(alignment: .top) {
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundColor(.white)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.red.opacity(0.8).cornerRadius(8))
-            }
- 
             Theme.screenBackground
                 .ignoresSafeArea()
- 
+
             Theme.headerBackground
                 .frame(height: 228)
                 .ignoresSafeArea(edges: .top)
@@ -115,18 +106,31 @@ struct HomeView: View {
             .padding(.horizontal, 14)
             .padding(.top, 24)
             .padding(.bottom, 24)
+            
+            VStack() {
+                if let errorMessage = viewModel.errorMessage {
+                    Button(action: {
+                        viewModel.errorMessage = nil
+                    }) {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.red.opacity(0.8).cornerRadius(Theme.cornerRadius))
+                    }
+                    .padding()
+                }
+                Spacer()
+            }
         }
         .navigationBarHidden(true)
         .task {
-            if viewModel.currentUser == nil {
-                await viewModel.fetchDashboardData(store: dataStore)
-                await viewModel.fetchProfile(store: dataStore)
-                await viewModel.fetchAttendanceHistoryData(store: dataStore)
-            }
+            await viewModel.requestData(dataStore: dataStore)
         }
     }
 }
- 
+
 #Preview {
     NavigationStack { HomeView()
         .environment(DataStore(apiService: ApiService()))}

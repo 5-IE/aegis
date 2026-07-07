@@ -31,7 +31,8 @@ class HttpService {
         _ method: String,
         endpoint: String,
         params: [String: Any]? = nil,
-        queryParams: [String: String]? = nil
+        queryParams: [String: String]? = nil,
+        isRetry: Bool = false
     ) async throws -> T {
         var urlComponents = URLComponents(string: baseURL + endpoint)!
         if let queryParams = queryParams {
@@ -54,6 +55,33 @@ class HttpService {
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw ApiError(error: "internal_server_error", message: "Invalid response from server.")
+        }
+        
+        if let url = urlComponents.url {
+            print("\(httpResponse.statusCode) - \(url)")
+        }
+        
+        if httpResponse.statusCode == 401 && !isRetry {
+            do {
+                if let apiService = self as? ApiServiceProtocol {
+                    if let refreshToken = UserDefaults.standard.string(forKey: "aegis-refresh-token") {
+                        let authResponse = try await apiService.refreshToken(refreshToken: refreshToken)
+                        print(authResponse)
+                        
+                        // Store auth data
+                        UserDefaults.standard.set(authResponse.refreshToken, forKey: "aegis-refresh-token")
+                        UserDefaults.standard.set(authResponse.accessToken, forKey: "aegis-access-token")
+                        
+                        return try await self.request(method, endpoint: endpoint, params: params, queryParams: queryParams, isRetry: true)
+                    }
+                }
+            }  catch let error as ApiError {
+                print(error)
+                throw error
+            } catch {
+                print(error.localizedDescription)
+                throw ApiError(error: "unauthorized", message: "Session expired. Please login again.")
+            }
         }
         
         let decoder = JSONDecoder()

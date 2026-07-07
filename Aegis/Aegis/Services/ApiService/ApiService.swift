@@ -6,7 +6,8 @@
 //
 
 protocol ApiServiceProtocol {
-    func login(username: String, password: String) async throws -> AuthResponse
+    func login(username: String, password: String) async throws -> LoginResponse
+    func refreshToken(refreshToken: String) async throws -> AuthResponse
     func registerDevice(publicKey: String) async throws -> EmptyResponse
     func fetchProfile() async throws -> User
     func fetchDashboard() async throws -> DashboardData
@@ -21,9 +22,13 @@ extension ApiServiceProtocol {
 
 class ApiService: HttpService, ApiServiceProtocol {
     
-    func login(username: String, password: String) async throws -> AuthResponse {
+    func login(username: String, password: String) async throws -> LoginResponse {
         let params = ["username": username, "password": password]
         return try await request("POST", endpoint: "/auth/login", params: params)
+    }
+    func refreshToken(refreshToken: String) async throws -> AuthResponse {
+        let params = ["refresh_token": refreshToken]
+        return try await request("POST", endpoint: "/auth/refresh", params: params)
     }
     func registerDevice(publicKey: String) async throws -> EmptyResponse {
         let params = ["device_public_key": publicKey]

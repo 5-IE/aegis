@@ -33,28 +33,23 @@ class DataStore {
         self.isLoggedIn =
         UserDefaults.standard.string(forKey: "aegis-refresh-token") != nil &&
         UserDefaults.standard.string(forKey: "aegis-access-token") != nil
-//        self.isLoggedIn = false
-//        UserDefaults.standard.removeObject(forKey: "aegis-access-token")
     }
     
     func loadInitialData() async {
         isLoading = true
         errorMessage = nil
         
-        do {
-            // Fetch everything concurrently
-            if (isLoggedIn) {
-                async let fetchedProfile = fetchProfile()
-                self.currentUser = try await fetchedProfile
-            }
-        } catch {
-            self.errorMessage = "Failed to sync data: \(error.localizedDescription)"
-        }
+//        do {
+//            // Fetch everything concurrently
+////
+//        } catch {
+//            self.errorMessage = "Failed to sync data: \(error.localizedDescription)"
+//        }
         
         isLoading = false
     }
     
-    func login(username: String, password: String) async throws -> AuthResponse {
+    func login(username: String, password: String) async throws -> LoginResponse {
         let response = try await apiService.login(username: username, password: password)
         self.currentUser = response.user
         
