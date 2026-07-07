@@ -5,6 +5,7 @@ import { dashboardRouter } from './routes/dashboard.js';
 import { historiesRouter } from './routes/histories.js';
 import { presenceRouter } from './routes/presence.js';
 import { beaconsRouter } from './routes/beacons.js';
+import { registerDeviceRouter } from './routes/registerDevice.js';
 import { absenceSummaryRouter } from './routes/admin/absenceSummary.js';
 import { adminOverviewRouter } from './routes/admin/overview.js';
 import { adminRoomsRouter } from './routes/admin/rooms.js';
@@ -31,6 +32,7 @@ export function buildApp(): express.Express {
   app.use('/api/v1/histories', historiesRouter);
   app.use('/api/v1/presence', presenceRouter);
   app.use('/api/v1/beacons', beaconsRouter);
+  app.use('/api/v1/register-device', registerDeviceRouter);
 
   app.use('/api/v1/admin/absence-summary', absenceSummaryRouter);
   app.use('/api/v1/admin/overview', adminOverviewRouter);
