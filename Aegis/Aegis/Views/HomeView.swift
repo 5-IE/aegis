@@ -6,15 +6,6 @@ struct HomeView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundColor(.white)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.red.opacity(0.8).cornerRadius(8))
-            }
-            
             Theme.screenBackground
                 .ignoresSafeArea()
 
@@ -44,6 +35,11 @@ struct HomeView: View {
                                 .foregroundColor(Theme.primaryDark)
                         }
                         Spacer()
+                        
+                        Button("Logout") {
+                            dataStore.isLoggedIn = false
+                        }
+                        .padding()
                     }
 
                     // Stat cards
@@ -110,18 +106,32 @@ struct HomeView: View {
                 .padding(.top, 24)
                 .padding(.bottom, 24)
             }
+            
+            VStack() {
+                if let errorMessage = viewModel.errorMessage {
+                    Button(action: {
+                        viewModel.errorMessage = nil
+                    }) {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.red.opacity(0.8).cornerRadius(Theme.cornerRadius))
+                    }
+                        
+                        .padding()
+                }
+                Spacer()
+            }
         }
         .navigationBarHidden(true)
         .task {
-            if viewModel.currentUser == nil {
-                await viewModel.fetchDashboardData(store: dataStore)
-                await viewModel.fetchProfile(store: dataStore)
-                await viewModel.fetchAttendanceHistoryData(store: dataStore)
-            }
+            await viewModel.requestData(dataStore: dataStore)
         }
     }
 }
 
 #Preview {
-    NavigationStack { HomeView() }
+    NavigationStack { HomeView().environment(DataStore(apiService: ApiService())) }
 }

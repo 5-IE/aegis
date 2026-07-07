@@ -30,6 +30,14 @@ class HomeViewModel: ObservableObject {
         self.setupTodayDate()
     }
     
+    func requestData(dataStore: DataStore) async {
+        if self.currentUser == nil {
+            await self.fetchProfile(store: dataStore)
+            await self.fetchDashboardData(store: dataStore)
+            await self.fetchAttendanceHistoryData(store: dataStore)
+        }
+    }
+    
     private func setupTodayDate() {
         let formatter = DateFormatter()
         formatter.dateFormat = "E, d MMM yyyy"
@@ -38,13 +46,12 @@ class HomeViewModel: ObservableObject {
     
     func fetchProfile(store: DataStore) async {
         isLoading = true
-        errorMessage = nil
         
         do {
             let profile = try await store.fetchProfile()
             currentUser = profile
         } catch let error as ApiError {
-            self.errorMessage = "\(error.error ?? "") - \(error.message ?? "")"
+            self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
         } catch {
             self.errorMessage = "An unexpected error occurred."
         }
@@ -53,14 +60,12 @@ class HomeViewModel: ObservableObject {
     
     func fetchDashboardData(store: DataStore) async {
         isLoading = true
-        errorMessage = nil
         
         do {
             let dashboardData = try await store.fetchDashboard()
             self.totalAttendance = String(format: "%02d", dashboardData.totalAttendance)
             self.totalLate = String(format: "%02d", dashboardData.totalLate)
             self.leaveTaken = String(format: "%02d", dashboardData.leaveTaken)
-            
             
             let formatter = DateFormatter()
             formatter.dateFormat = "hh:mm a"
@@ -71,7 +76,7 @@ class HomeViewModel: ObservableObject {
                 self.checkedInAt = "-"
             }
         } catch let error as ApiError {
-            self.errorMessage = "\(error.error ?? "") - \(error.message ?? "")"
+            self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
         } catch {
             self.errorMessage = "An unexpected error occurred."
         }
@@ -81,7 +86,6 @@ class HomeViewModel: ObservableObject {
     
     func fetchAttendanceHistoryData(store: DataStore) async {
         isLoading = true
-        errorMessage = nil
         
         do {
             let response = try await store.fetchAttendanceHistory()
@@ -90,7 +94,7 @@ class HomeViewModel: ObservableObject {
             self.attendanceHistory = attendanceHistoryData.map { Attendance(from: $0) }
             
         } catch let error as ApiError {
-            self.errorMessage = "\(error.error ?? "") - \(error.message ?? "")"
+            self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
         } catch {
             self.errorMessage = "An unexpected error occurred."
         }

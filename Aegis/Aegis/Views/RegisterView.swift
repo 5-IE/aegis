@@ -94,5 +94,5 @@ struct RegisterView: View {
 
 
 #Preview {
-    RegisterView()
+    NavigationStack { RegisterView().environment(DataStore(apiService: ApiService())) }
 }
