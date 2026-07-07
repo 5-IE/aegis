@@ -19,7 +19,12 @@ import { errorHandler } from './middleware/errorHandler.js';
 export function buildApp(): express.Express {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(express.json({ limit: '64kb' }));
+  app.use(express.json({
+    limit: '64kb',
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  }));
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
