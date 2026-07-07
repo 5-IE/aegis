@@ -2,11 +2,18 @@ import SwiftUI
 
 struct AttendanceHistoryView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var currentMonthIndex: Int = 0
-    private let months = ["May 2026", "June 2026", "July 2026"]
+    @Environment(DataStore.self) private var store
+    @State private var selectedMonthIndex: Int = 1
+    @StateObject var viewModel = AttendanceHistoryViewModel()
+    
+    private let months: [(label: String, month: Int, year: Int)] = [
+        ("May 2026", 5, 2026),
+        ("June 2026", 6, 2026),
+        ("July 2026", 7, 2026)
+    ]
 
     private var monthLabel: String {
-        months[1 + currentMonthIndex]
+        months[selectedMonthIndex].label
     }
 
     var body: some View {
@@ -54,23 +61,26 @@ struct AttendanceHistoryView: View {
             // List
             ScrollView {
                 VStack(spacing: 0) {
-//                    ForEach(Array(SampleData.juneHistory.enumerated()), id: \.element.id) { index, record in
-//                        AttendanceRow(record: record)
-//                            .padding(.horizontal, 22)
-//
-//                        if index < SampleData.juneHistory.count - 1 {
-//                            Divider()
-//                        }
-//                    }
+                    ForEach(Array(viewModel.attendanceHistory.enumerated()), id: \.element.date) { index, record in
+                        AttendanceRow(record: record)
+                        if index < viewModel.attendanceHistory.count - 1 {
+                            Divider()
+                        }
+                    }
+                    .padding(.horizontal, 14)
                 }
 
                 .padding(.vertical, 10)
                 .background(Theme.cardBackground.opacity(0.85))
                 .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .shadow(color: Color.black.opacity(0.25), radius: 18, x: 0, y: 8)
+                .shadow(color: Color.black.opacity(0.1), radius: 18, x: 0, y: 8)
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
                 .padding(.bottom, 20)
+
+                .task {
+                    await fetchSelectedMonth()
+                }
             }
         }
         .background(
@@ -85,13 +95,27 @@ struct AttendanceHistoryView: View {
     }
 
     private func changeMonth(by delta: Int) {
-        let newIndex = currentMonthIndex + delta
-        if newIndex >= -1 && newIndex <= 1 {
-            currentMonthIndex = newIndex
+        let newIndex = selectedMonthIndex + delta
+        if months.indices.contains(newIndex) {
+            selectedMonthIndex = newIndex
+            Task {
+                await fetchSelectedMonth()
+            }
         }
+    }
+
+    @MainActor
+    private func fetchSelectedMonth() async {
+        let selectedMonth = months[selectedMonthIndex]
+        await viewModel.fetchAttendanceHistoryData(
+            store: store,
+            month: selectedMonth.month,
+            year: selectedMonth.year
+        )
     }
 }
 
 #Preview {
-    NavigationStack { AttendanceHistoryView() }
+    NavigationStack { AttendanceHistoryView()
+        .environment(DataStore(apiService: ApiService()))}
 }
