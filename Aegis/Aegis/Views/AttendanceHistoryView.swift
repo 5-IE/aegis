@@ -3,17 +3,23 @@ import SwiftUI
 struct AttendanceHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(DataStore.self) private var store
-    @State private var selectedMonthIndex: Int = 1
+    @State private var selectedMonth: AttendanceMonthOption?
     @StateObject var viewModel = AttendanceHistoryViewModel()
-    
-    private let months: [(label: String, month: Int, year: Int)] = [
-        ("May 2026", 5, 2026),
-        ("June 2026", 6, 2026),
-        ("July 2026", 7, 2026)
-    ]
+
+    private var months: [AttendanceMonthOption] {
+        viewModel.availableMonths
+    }
 
     private var monthLabel: String {
-        months[selectedMonthIndex].label
+        selectedMonth?.label ?? "No Data Available"
+    }
+
+    private var canMovePrevious: Bool {
+        canMoveMonth(by: -1)
+    }
+
+    private var canMoveNext: Bool {
+        canMoveMonth(by: 1)
     }
 
     var body: some View {
@@ -46,15 +52,17 @@ struct AttendanceHistoryView: View {
             HStack(spacing: 24) {
                 Button(action: { changeMonth(by: -1) }) {
                     Image(systemName: "chevron.left")
-                        .foregroundColor(.white)
+                        .foregroundColor(.white.opacity(canMovePrevious ? 1 : 0.35))
                 }
+                .disabled(!canMovePrevious)
                 Text(monthLabel)
                     .font(.system(size: 22, weight:.medium))
                     .foregroundColor(.white)
                 Button(action: { changeMonth(by: 1) }) {
                     Image(systemName: "chevron.right")
-                        .foregroundColor(.white)
+                        .foregroundColor(.white.opacity(canMoveNext ? 1 : 0.35))
                 }
+                .disabled(!canMoveNext)
             }
             .padding(.vertical, 10)
 
@@ -77,10 +85,6 @@ struct AttendanceHistoryView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
                 .padding(.bottom, 20)
-
-                .task {
-                    await fetchSelectedMonth()
-                }
             }
         }
         .background(
@@ -92,21 +96,74 @@ struct AttendanceHistoryView: View {
             .ignoresSafeArea()
         )
         .navigationBarHidden(true)
+        .task {
+            await loadInitialData()
+        }
     }
 
     private func changeMonth(by delta: Int) {
-        let newIndex = selectedMonthIndex + delta
-        if months.indices.contains(newIndex) {
-            selectedMonthIndex = newIndex
-            Task {
-                await fetchSelectedMonth()
-            }
+        guard canMoveMonth(by: delta), let targetMonth = monthOption(byAdding: delta) else { return }
+
+        selectedMonth = targetMonth
+        Task {
+            await fetchSelectedMonth()
+        }
+    }
+
+    private func canMoveMonth(by delta: Int) -> Bool {
+        guard let targetMonth = monthOption(byAdding: delta) else { return false }
+        return viewModel.hasAttendanceHistory(month: targetMonth.month, year: targetMonth.year)
+    }
+
+    private func monthOption(byAdding delta: Int) -> AttendanceMonthOption? {
+        guard let selectedMonth else { return nil }
+
+        var components = DateComponents()
+        components.month = selectedMonth.month
+        components.year = selectedMonth.year
+
+        guard
+            let date = Calendar.current.date(from: components),
+            let targetDate = Calendar.current.date(byAdding: .month, value: delta, to: date)
+        else { return nil }
+
+        let targetComponents = Calendar.current.dateComponents([.month, .year], from: targetDate)
+        guard let month = targetComponents.month, let year = targetComponents.year else { return nil }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+
+        return AttendanceMonthOption(label: formatter.string(from: targetDate), month: month, year: year)
+    }
+
+    @MainActor
+    private func loadInitialData() async {
+        await viewModel.fetchAvailableMonths(store: store)
+        selectDefaultMonth()
+        await fetchSelectedMonth()
+    }
+
+    private func selectDefaultMonth() {
+        guard !months.isEmpty else {
+            selectedMonth = nil
+            return
+        }
+
+        let currentDateComponents = Calendar.current.dateComponents([.month, .year], from: Date())
+        if let currentMonth = months.first(where: {
+            $0.month == currentDateComponents.month && $0.year == currentDateComponents.year
+        }) {
+            selectedMonth = currentMonth
+        } else {
+            selectedMonth = months.last
         }
     }
 
     @MainActor
     private func fetchSelectedMonth() async {
-        let selectedMonth = months[selectedMonthIndex]
+        guard let selectedMonth else { return }
+
         await viewModel.fetchAttendanceHistoryData(
             store: store,
             month: selectedMonth.month,
