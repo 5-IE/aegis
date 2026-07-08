@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aegis Device Signing Tester</title>
+<style>
+  :root { --bg:#0f1420; --panel:#1a2130; --ink:#e7ecf3; --mut:#9aa7bd; --acc:#4a8cff; --ok:#3fbf6f; --err:#ff6b6b; --line:#2b3547; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0 0 4px; font-size:18px; }
+  header p { margin:0; color:var(--mut); font-size:13px; }
+  main { max-width:960px; margin:0 auto; padding:24px; display:flex; flex-direction:column; gap:18px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; }
+  .card h2 { margin:0 0 12px; font-size:14px; letter-spacing:.02em; text-transform:uppercase; color:var(--mut); }
+  label { display:block; font-size:12px; color:var(--mut); margin:10px 0 4px; }
+  input, textarea, select { width:100%; background:#0d1220; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  textarea { resize:vertical; min-height:64px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > * { flex:1; min-width:180px; }
+  button { background:var(--acc); color:#fff; border:0; border-radius:6px; padding:9px 14px; font-weight:600; cursor:pointer; margin-top:12px; }
+  button.sec { background:#2b3547; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .out { background:#0b0f18; border:1px solid var(--line); border-radius:6px; padding:10px; margin-top:8px; white-space:pre-wrap; word-break:break-all; font:12px/1.5 ui-monospace,Menlo,monospace; position:relative; }
+  .out .copy { position:absolute; top:6px; right:6px; margin:0; padding:3px 8px; font-size:11px; }
+  .kv { color:var(--mut); }
+  .kv b { color:var(--ink); font-weight:600; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+  .pill.ok { background:rgba(63,191,111,.15); color:var(--ok); }
+  .pill.err { background:rgba(255,107,107,.15); color:var(--err); }
+  .pill.warn { background:rgba(255,196,64,.15); color:#ffc440; }
+  .note { color:var(--mut); font-size:12px; margin-top:8px; }
+  code { background:#0d1220; padding:1px 5px; border-radius:4px; }
+  .steps { counter-reset:s; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Aegis Device Signing Tester</h1>
+  <p>Generate a P-256 device key in your browser, register it, and produce a signed <code>POST /api/v1/presence</code> request — as ready-to-paste <code>curl</code> or a live call. Fully client-side; nothing is sent anywhere except the requests you fire.</p>
+</header>
+<main>
+
+  <div class="card">
+    <h2>0 · Config</h2>
+    <div class="row">
+      <div>
+        <label>Base URL</label>
+        <input id="baseUrl" value="http://10.64.50.204:3000" />
+      </div>
+      <div>
+        <label>Learner JWT (access token)</label>
+        <input id="jwt" placeholder="eyJ..." />
+      </div>
+    </div>
+    <div class="note">The JWT must belong to a <b>learner</b>. Get it by logging in via <code>POST /auth/login</code> (or copy it from the app / Postman). The device key you register here binds to whatever user that JWT identifies.</div>
+  </div>
+
+  <div class="card">
+    <h2>1 · Device key</h2>
+    <div class="note">A P-256 key pair is generated with WebCrypto and stored in this browser's <code>localStorage</code>, so it survives reloads — just like the app persists its key in the Keychain. This is the browser's stand-in for the Secure Enclave.</div>
+    <div class="row">
+      <button id="genKey">Generate / load key</button>
+      <button id="newKey" class="sec">Force new key</button>
+    </div>
+    <div id="keyStatus" class="note"></div>
+    <label>Public key (raw X9.63, base64) — this is <code>device_public_key</code></label>
+    <div id="pubOut" class="out">—</div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Register the device</h2>
+    <div class="note">One-time, JWT-only (no signature). Stores the public key on the user's record. Run this once per user × device.</div>
+    <button id="regLive">Register (live fetch)</button>
+    <button id="regCurl" class="sec">Show curl</button>
+    <div id="regResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>3 · Sign &amp; send presence</h2>
+    <div class="row">
+      <div>
+        <label>Method</label>
+        <select id="method"><option>POST</option><option>GET</option></select>
+      </div>
+      <div>
+        <label>Path (no host, no query)</label>
+        <input id="path" value="/api/v1/presence" />
+      </div>
+    </div>
+    <label>JSON body (leave empty for a bodyless request)</label>
+    <textarea id="body">{"room_id":3,"battery_level":88}</textarea>
+    <div class="note">The exact bytes typed here are what get hashed <i>and</i> sent — the tool never re-serializes them, so what you see is what is signed.</div>
+
+    <button id="sign">Build signature</button>
+
+    <div id="canonWrap" style="display:none">
+      <label>Canonical payload string (this is what gets signed)</label>
+      <div id="canonOut" class="out">—</div>
+      <div class="row">
+        <div><label>X-Timestamp</label><div id="tsOut" class="out">—</div></div>
+      </div>
+      <label>X-Signature (base64 DER)</label>
+      <div id="sigOut" class="out">—</div>
+
+      <button id="sendLive">Send presence (live fetch)</button>
+      <button id="sendCurl" class="sec">Show curl</button>
+      <div id="sendResult"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Notes &amp; troubleshooting</h2>
+    <ul class="note" style="margin:0;padding-left:18px">
+      <li><b>Live fetch blocked?</b> The backend has no CORS configured, so a browser <code>POST</code> with custom headers is blocked by the preflight. Use the <b>Show curl</b> buttons — those always work from a terminal. Live fetch only succeeds if CORS is enabled or you serve this page from the same origin.</li>
+      <li><b>403 "No device registered"</b> → run step 2 first (and make sure the JWT is the same user).</li>
+      <li><b>403 "Invalid device signature"</b> → body bytes or key mismatch. Re-copy the exact body; regenerate/register the key.</li>
+      <li><b>400 invalid_request</b> → missing headers or your clock is off by &gt;60 s from the server.</li>
+      <li><b>204</b> → success. 🎉</li>
+    </ul>
+  </div>
+
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const LS_KEY = 'aegis-device-jwk';
+let keyPair = null;       // { privateKey (CryptoKey), rawPubB64 (string) }
+
+// ---------- helpers ----------
+function b64(bytes) { let s=''; const b=new Uint8Array(bytes); for (let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return btoa(s); }
+function hex(bytes) { return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+async function sha256Hex(bytes) { return hex(await crypto.subtle.digest('SHA-256', bytes)); }
+
+// WebCrypto ECDSA outputs r||s (IEEE P1363, 64 bytes). The server expects DER.
+function p1363ToDer(sig) {
+  const r = sig.slice(0, 32), s = sig.slice(32, 64);
+  const trim = (buf) => { let a=[...buf]; while (a.length>1 && a[0]===0) a.shift(); if (a[0]&0x80) a.unshift(0); return a; };
+  const R = trim(r), S = trim(s);
+  const body = [0x02, R.length, ...R, 0x02, S.length, ...S];
+  return new Uint8Array([0x30, body.length, ...body]);
+}
+
+function setOut(el, text, withCopy=true) {
+  el.textContent = text;
+  if (withCopy && text && text !== '—') {
+    const btn = document.createElement('button');
+    btn.className = 'copy sec'; btn.textContent = 'copy';
+    btn.onclick = () => { navigator.clipboard.writeText(text); btn.textContent='copied'; setTimeout(()=>btn.textContent='copy',900); };
+    el.appendChild(btn);
+  }
+}
+
+function shellQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+
+// ---------- key ----------
+async function loadOrCreate(forceNew=false) {
+  if (!forceNew) {
+    const saved = localStorage.getItem(LS_KEY);
+    if (saved) {
+      const jwk = JSON.parse(saved);
+      const priv = await crypto.subtle.importKey('jwk', jwk, {name:'ECDSA',namedCurve:'P-256'}, true, ['sign']);
+      const pub  = await crypto.subtle.importKey('jwk', {kty:jwk.kty,crv:jwk.crv,x:jwk.x,y:jwk.y}, {name:'ECDSA',namedCurve:'P-256'}, true, ['verify']);
+      const raw = await crypto.subtle.exportKey('raw', pub);
+      keyPair = { privateKey: priv, rawPubB64: b64(raw) };
+      $('keyStatus').innerHTML = '<span class="pill ok">loaded existing key</span>';
+      setOut($('pubOut'), keyPair.rawPubB64);
+      return;
+    }
+  }
+  const kp = await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'}, true, ['sign','verify']);
+  const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+  localStorage.setItem(LS_KEY, JSON.stringify(jwk));
+  const raw = await crypto.subtle.exportKey('raw', kp.publicKey);
+  keyPair = { privateKey: kp.privateKey, rawPubB64: b64(raw) };
+  $('keyStatus').innerHTML = '<span class="pill ok">' + (forceNew?'new key generated':'key generated') + '</span> stored in localStorage';
+  setOut($('pubOut'), keyPair.rawPubB64);
+}
+
+$('genKey').onclick = () => loadOrCreate(false);
+$('newKey').onclick = () => loadOrCreate(true);
+
+// ---------- register ----------
+function regBody() { return JSON.stringify({ device_public_key: keyPair.rawPubB64 }); }
+
+$('regCurl').onclick = () => {
+  if (!keyPair) return alert('Generate a key first (step 1).');
+  const url = $('baseUrl').value.replace(/\/$/,'') + '/api/v1/register-device';
+  const cmd = `curl -sS -X POST ${shellQuote(url)} \\\n`
+    + `  -H ${shellQuote('Authorization: Bearer ' + $('jwt').value)} \\\n`
+    + `  -H 'Content-Type: application/json' \\\n`
+    + `  -d ${shellQuote(regBody())}`;
+  const box = document.createElement('div'); box.className='out';
+  $('regResult').innerHTML=''; $('regResult').appendChild(box); setOut(box, cmd);
+};
+
+$('regLive').onclick = async () => {
+  if (!keyPair) return alert('Generate a key first (step 1).');
+  const url = $('baseUrl').value.replace(/\/$/,'') + '/api/v1/register-device';
+  await liveCall('regResult', url, 'POST', {
+    'Authorization': 'Bearer ' + $('jwt').value,
+    'Content-Type': 'application/json',
+  }, regBody());
+};
+
+// ---------- sign ----------
+let signed = null; // { ts, sigB64, bodyStr }
+
+$('sign').onclick = async () => {
+  if (!keyPair) return alert('Generate a key first (step 1).');
+  const method = $('method').value;
+  const path = $('path').value.trim();
+  const bodyStr = $('body').value; // exact bytes, no re-serialize
+  const bodyBytes = new TextEncoder().encode(bodyStr.length ? bodyStr : '');
+  const ts = Math.floor(Date.now()/1000);
+  const bodyHash = await sha256Hex(bodyBytes);
+  const payload = `${method}\n${path}\n${ts}\n${bodyHash}`;
+
+  const sigP1363 = new Uint8Array(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'}, keyPair.privateKey, new TextEncoder().encode(payload)));
+  const sigB64 = b64(p1363ToDer(sigP1363));
+
+  signed = { ts, sigB64, bodyStr };
+  $('canonWrap').style.display='block';
+  setOut($('canonOut'), payload.replace(/\n/g,'\\n\n')); // show \n markers + real breaks
+  setOut($('tsOut'), String(ts));
+  setOut($('sigOut'), sigB64);
+};
+
+function sendUrl() { return $('baseUrl').value.replace(/\/$/,'') + $('path').value.trim(); }
+
+$('sendCurl').onclick = () => {
+  if (!signed) return;
+  const hasBody = signed.bodyStr.length > 0;
+  let cmd = `curl -sS -X ${$('method').value} ${shellQuote(sendUrl())} \\\n`
+    + `  -H ${shellQuote('Authorization: Bearer ' + $('jwt').value)} \\\n`
+    + `  -H ${shellQuote('X-Timestamp: ' + signed.ts)} \\\n`
+    + `  -H ${shellQuote('X-Signature: ' + signed.sigB64)}`;
+  if (hasBody) cmd += ` \\\n  -H 'Content-Type: application/json' \\\n  -d ${shellQuote(signed.bodyStr)}`;
+  const box = document.createElement('div'); box.className='out';
+  $('sendResult').innerHTML=''; $('sendResult').appendChild(box); setOut(box, cmd);
+};
+
+$('sendLive').onclick = async () => {
+  if (!signed) return;
+  const headers = {
+    'Authorization': 'Bearer ' + $('jwt').value,
+    'X-Timestamp': String(signed.ts),
+    'X-Signature': signed.sigB64,
+  };
+  if (signed.bodyStr.length) headers['Content-Type']='application/json';
+  await liveCall('sendResult', sendUrl(), $('method').value, headers, signed.bodyStr.length ? signed.bodyStr : undefined);
+};
+
+// ---------- live fetch (best effort; may hit CORS) ----------
+async function liveCall(targetId, url, method, headers, body) {
+  const target = $(targetId);
+  target.innerHTML = '<div class="note">sending…</div>';
+  try {
+    const res = await fetch(url, { method, headers, body });
+    let text = '';
+    try { text = await res.text(); } catch {}
+    const pill = res.ok ? `<span class="pill ok">${res.status}</span>` : `<span class="pill err">${res.status}</span>`;
+    target.innerHTML = `<div class="note">${pill} ${res.statusText || ''}</div>`;
+    if (text) { const box=document.createElement('div'); box.className='out'; target.appendChild(box); setOut(box, text, false); }
+    else { target.innerHTML += '<div class="note">(empty body — e.g. 204)</div>'; }
+  } catch (e) {
+    target.innerHTML = `<div class="note"><span class="pill warn">blocked</span> ${e.message}. This is almost certainly CORS — use <b>Show curl</b> instead.</div>`;
+  }
+}
+
+// auto-load an existing key on open
+loadOrCreate(false).catch(()=>{});
+</script>
+</body>
+</html>
