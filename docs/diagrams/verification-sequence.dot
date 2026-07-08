@@ -1,0 +1,46 @@
+digraph verification {
+  rankdir=TB;
+  bgcolor="white";
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", fillcolor="#ffffff"];
+  edge [fontname="Helvetica", fontsize=9];
+  labelloc="t";
+  label=<<b>Per-Request Signature Verification — POST /api/v1/presence</b>>;
+
+  subgraph cluster_c { label=<<b>iOS App — sign</b>>; style="rounded,filled"; fillcolor="#eef4ff"; color="#7aa2e3";
+    c1 [label="HttpService.request(POST, /api/v1/presence, params)"];
+    c2 [label="bodyData = JSONSerialization.data(params)\n(serialize ONCE — hash & send same bytes)"];
+    c3 [label="signRequest(method, path, bodyData)"];
+    c4 [label="payload =\nPOST\\n/api/v1/presence\\n{ts}\\nSHA256_HEX(bodyData)"];
+    c5 [label="sig = privateKey.signature(for: payload)\nX-Signature = base64(sig.derRepresentation)\nX-Timestamp = ts"];
+    c1 -> c2 -> c3 -> c4 -> c5;
+  }
+
+  subgraph cluster_s { label=<<b>Backend — requireSignature</b>>; style="rounded,filled"; fillcolor="#eefaf0"; color="#6fbf7a";
+    s0 [label="requireAuth → requireRole('learner') → requireSignature"];
+    s1 [label="1. headers present?  ts is /^\\d+$/ ?", shape=diamond, fillcolor="#fff8dc"];
+    s2 [label="2. |now − ts| ≤ 60s ?", shape=diamond, fillcolor="#fff8dc"];
+    s3 [label="3. findUserById → device_public_key present?", shape=diamond, fillcolor="#fff8dc"];
+    s4 [label="4. rebuild payload\npath = req.originalUrl split '?'\nbodyHash = SHA256(req.rawBody)"];
+    s5 [label="5. x963ToSpkiDer(stored key)\ncreateVerify('SHA256').verify(payload, sig)", shape=diamond, fillcolor="#fff8dc"];
+    ok  [label="next() → handler → 204 No Content", fillcolor="#d6f5d6"];
+    e400 [label="400 invalid_request", fillcolor="#f8d6d6"];
+    e403 [label="403 forbidden", fillcolor="#f8d6d6"];
+
+    s0 -> s1;
+    s1 -> e400 [label="no"];
+    s1 -> s2 [label="yes"];
+    s2 -> e400 [label="stale/future"];
+    s2 -> s3 [label="fresh"];
+    s3 -> e403 [label="no key"];
+    s3 -> s4 [label="yes"];
+    s4 -> s5;
+    s5 -> e403 [label="invalid / throws"];
+    s5 -> ok [label="valid"];
+  }
+
+  c5 -> s0 [label="  Authorization + X-Timestamp + X-Signature + body", color="#2c6cbf", fontcolor="#2c6cbf", penwidth=2];
+
+  note [shape=note, fillcolor="#fff8dc", label="Binding: METHOD + PATH + TIMESTAMP + body\nare ALL inside the signed string. A signature\nfor a different route, verb, body, or an old\ntimestamp will not verify."];
+  s5 -> note [style=invis];
+}

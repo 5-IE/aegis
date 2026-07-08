@@ -54,6 +54,7 @@ const learnerRow = {
   last_name: 'Doe',
   session: 'AM' as const,
   is_active: true,
+  device_public_key: null,
   created_at: new Date('2026-01-15T00:00:00Z'),
 };
 
