@@ -25,6 +25,9 @@ if (jwtSecret.length < 32) {
 export const config = {
   port: Number.parseInt(process.env.PORT ?? '3000', 10),
   logLevel: process.env.LOG_LEVEL ?? 'info',
+  // Optional: when set, every log line is also written to this file (in
+  // addition to stdout/journal). e.g. LOG_FILE=/var/log/aegis/app.log
+  logFile: process.env.LOG_FILE && process.env.LOG_FILE.length > 0 ? process.env.LOG_FILE : undefined,
   jwtSecret,
   db: {
     host: required('DB_HOST'),
@@ -32,5 +35,11 @@ export const config = {
     user: required('DB_USER'),
     password: required('DB_PASSWORD'),
     name: required('DB_NAME'),
+  },
+  sentry: {
+    // Optional: set SENTRY_DSN to enable error monitoring. Empty = disabled.
+    dsn: process.env.SENTRY_DSN && process.env.SENTRY_DSN.length > 0 ? process.env.SENTRY_DSN : undefined,
+    environment: process.env.SENTRY_ENVIRONMENT ?? process.env.NODE_ENV ?? 'development',
+    tracesSampleRate: Number.parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE ?? '0'),
   },
 } as const;
