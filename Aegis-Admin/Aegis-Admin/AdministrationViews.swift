@@ -8,6 +8,7 @@ struct AdministrationView: View {
     @State private var userForm: AdminUserForm?
     @State private var passwordResetUser: AdminUser?
     @State private var deleteTarget: AdminUser?
+    @State private var reactivateTarget: AdminUser?
     @State private var roomForm: AdminRoomForm?
     @State private var roomDeleteTarget: Room?
     @State private var beaconForm: AdminBeaconForm?
@@ -64,6 +65,13 @@ struct AdministrationView: View {
                 await viewModel.saveBeacon(form: draft, sessionStore: sessionStore)
             }
         }
+        .onChange(of: viewModel.searchText) { _, newValue in
+            // Backend rejects search terms over 100 chars with a 400; clamp
+            // the field so the list request can never trip that limit.
+            if newValue.count > FormValidators.searchMaxLength {
+                viewModel.searchText = String(newValue.prefix(FormValidators.searchMaxLength))
+            }
+        }
         .alert(
             "Deactivate User?",
             isPresented: Binding(
@@ -83,6 +91,26 @@ struct AdministrationView: View {
             }
         } message: { user in
             Text(user.displayName)
+        }
+        .alert(
+            "Reactivate User?",
+            isPresented: Binding(
+                get: { reactivateTarget != nil },
+                set: { if !$0 { reactivateTarget = nil } }
+            ),
+            presenting: reactivateTarget
+        ) { user in
+            Button("Reactivate") {
+                Task {
+                    await viewModel.reactivate(user: user, sessionStore: sessionStore)
+                    reactivateTarget = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                reactivateTarget = nil
+            }
+        } message: { user in
+            Text("Reactivating \(user.displayName) restores the user's access.")
         }
         .alert(
             "Delete Room?",
@@ -166,16 +194,16 @@ struct AdministrationView: View {
                         edit: { userForm = AdminUserForm(user: $0) },
                         resetPassword: { passwordResetUser = $0 },
                         delete: { deleteTarget = $0 },
-                        reactivate: { user in
-                            Task { await viewModel.reactivate(user: user, sessionStore: sessionStore) }
+                        reactivate: { reactivateTarget = $0 },
+                        retry: {
+                            Task { await viewModel.load(sessionStore: sessionStore) }
                         }
                     )
                 }
 
                 AdminPaginationFooter(
                     summary: viewModel.pageSummary,
-                    message: viewModel.actionMessage,
-                    successWords: ["User", "Password"],
+                    outcome: viewModel.actionMessage,
                     canGoPrevious: viewModel.canGoPrevious,
                     canGoNext: viewModel.canGoNext,
                     previous: {
@@ -207,14 +235,16 @@ struct AdministrationView: View {
                         beaconCount: { viewModel.beaconCount(for: $0) },
                         beaconStatus: { viewModel.beaconStatus(for: $0) },
                         edit: { roomForm = AdminRoomForm(room: $0) },
-                        delete: { roomDeleteTarget = $0 }
+                        delete: { roomDeleteTarget = $0 },
+                        retry: {
+                            Task { await viewModel.loadRooms(sessionStore: sessionStore) }
+                        }
                     )
                 }
 
                 AdminPaginationFooter(
                     summary: "Showing \(viewModel.rooms.count) rooms",
-                    message: viewModel.roomActionMessage,
-                    successWords: ["Room"],
+                    outcome: viewModel.roomActionMessage,
                     canGoPrevious: false,
                     canGoNext: false,
                     previous: {},
@@ -249,14 +279,16 @@ struct AdministrationView: View {
                         rows: viewModel.filteredBeacons,
                         state: viewModel.beaconState,
                         edit: { beaconForm = AdminBeaconForm(beacon: $0) },
-                        delete: { beaconDeleteTarget = $0 }
+                        delete: { beaconDeleteTarget = $0 },
+                        retry: {
+                            Task { await viewModel.loadBeacons(sessionStore: sessionStore) }
+                        }
                     )
                 }
 
                 AdminPaginationFooter(
                     summary: viewModel.beaconPageSummary,
-                    message: viewModel.beaconActionMessage,
-                    successWords: ["Beacon"],
+                    outcome: viewModel.beaconActionMessage,
                     canGoPrevious: viewModel.canGoPreviousBeaconPage,
                     canGoNext: viewModel.canGoNextBeaconPage,
                     previous: {
@@ -435,8 +467,7 @@ private struct BeaconManagementToolbar: View {
 
 private struct AdminPaginationFooter: View {
     let summary: String
-    let message: String?
-    let successWords: [String]
+    let outcome: ActionOutcome?
     let canGoPrevious: Bool
     let canGoNext: Bool
     let previous: () -> Void
@@ -448,10 +479,10 @@ private struct AdminPaginationFooter: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AegisColors.mutedText)
 
-            if let message {
-                Text(message)
+            if let outcome {
+                Text(outcome.text)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isSuccess(message) ? AegisColors.activeGreen : Color.red)
+                    .foregroundStyle(outcome.isSuccess ? AegisColors.activeGreen : Color.red)
             }
 
             Spacer()
@@ -477,9 +508,29 @@ private struct AdminPaginationFooter: View {
             .help("Next page")
         }
     }
+}
 
-    private func isSuccess(_ message: String) -> Bool {
-        successWords.contains { message.localizedCaseInsensitiveContains($0) }
+/// Error banner with a Retry action so a failed tab is never a dead end.
+private struct RetryableErrorBanner: View {
+    let message: String
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ErrorBanner(message: message)
+
+            Button(action: retry) {
+                Label("Retry", systemImage: "arrow.clockwise")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 13)
+                    .frame(height: 30)
+                    .background(AegisColors.teal)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .help("Try loading again")
+        }
     }
 }
 
@@ -545,6 +596,7 @@ private struct AdminRoomsTable: View {
     let beaconStatus: (Room) -> String
     let edit: (Room) -> Void
     let delete: (Room) -> Void
+    let retry: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -589,7 +641,7 @@ private struct AdminRoomsTable: View {
             }
 
             if case let .failed(message) = state {
-                ErrorBanner(message: message)
+                RetryableErrorBanner(message: message, retry: retry)
                     .padding(.top, 12)
             }
         }
@@ -601,6 +653,7 @@ private struct AdminBeaconsTable: View {
     let state: LoadState
     let edit: (AdminBeacon) -> Void
     let delete: (AdminBeacon) -> Void
+    let retry: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -647,7 +700,7 @@ private struct AdminBeaconsTable: View {
             }
 
             if case let .failed(message) = state {
-                ErrorBanner(message: message)
+                RetryableErrorBanner(message: message, retry: retry)
                     .padding(.top, 12)
             }
         }
@@ -662,6 +715,7 @@ private struct AdminUsersTable: View {
     let resetPassword: (AdminUser) -> Void
     let delete: (AdminUser) -> Void
     let reactivate: (AdminUser) -> Void
+    let retry: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -733,7 +787,7 @@ private struct AdminUsersTable: View {
             }
 
             if case let .failed(message) = state {
-                ErrorBanner(message: message)
+                RetryableErrorBanner(message: message, retry: retry)
                     .padding(.top, 12)
             }
         }
@@ -761,10 +815,11 @@ private struct IconActionButton: View {
 private struct AdminUserFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AdminUserForm
+    @State private var errorText: String?
     let isSaving: Bool
-    let onSave: (AdminUserForm) async -> Bool
+    let onSave: (AdminUserForm) async -> ActionOutcome
 
-    init(form: AdminUserForm, isSaving: Bool, onSave: @escaping (AdminUserForm) async -> Bool) {
+    init(form: AdminUserForm, isSaving: Bool, onSave: @escaping (AdminUserForm) async -> ActionOutcome) {
         self._draft = State(initialValue: form)
         self.isSaving = isSaving
         self.onSave = onSave
@@ -814,6 +869,10 @@ private struct AdminUserFormSheet: View {
                 if !draft.isEditing {
                     SecureFormField(title: "Password", text: $draft.password)
                 }
+
+                if let errorText {
+                    SheetErrorText(message: errorText)
+                }
             }
             .padding(24)
 
@@ -830,8 +889,12 @@ private struct AdminUserFormSheet: View {
 
                 Button(draft.submitTitle) {
                     Task {
-                        if await onSave(draft) {
+                        switch await onSave(draft) {
+                        case .success:
+                            errorText = nil
                             dismiss()
+                        case let .failure(message):
+                            errorText = message
                         }
                     }
                 }
@@ -840,16 +903,17 @@ private struct AdminUserFormSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 560, height: draft.isEditing ? 390 : 455)
+        .frame(width: 560, height: (draft.isEditing ? 390 : 455) + (errorText == nil ? 0 : 40))
     }
 }
 
 private struct PasswordResetSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var password = ""
+    @State private var errorText: String?
     let user: AdminUser
     let isSaving: Bool
-    let onSave: (String) async -> Bool
+    let onSave: (String) async -> ActionOutcome
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -859,6 +923,11 @@ private struct PasswordResetSheet: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AegisColors.mutedText)
             SecureFormField(title: "New Password", text: $password)
+
+            if let errorText {
+                SheetErrorText(message: errorText)
+            }
+
             HStack {
                 Spacer()
                 Button("Cancel") {
@@ -866,8 +935,12 @@ private struct PasswordResetSheet: View {
                 }
                 Button("Reset Password") {
                     Task {
-                        if await onSave(password) {
+                        switch await onSave(password) {
+                        case .success:
+                            errorText = nil
                             dismiss()
+                        case let .failure(message):
+                            errorText = message
                         }
                     }
                 }
@@ -883,10 +956,11 @@ private struct PasswordResetSheet: View {
 private struct AdminRoomFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AdminRoomForm
+    @State private var errorText: String?
     let isSaving: Bool
-    let onSave: (AdminRoomForm) async -> Bool
+    let onSave: (AdminRoomForm) async -> ActionOutcome
 
-    init(form: AdminRoomForm, isSaving: Bool, onSave: @escaping (AdminRoomForm) async -> Bool) {
+    init(form: AdminRoomForm, isSaving: Bool, onSave: @escaping (AdminRoomForm) async -> ActionOutcome) {
         self._draft = State(initialValue: form)
         self.isSaving = isSaving
         self.onSave = onSave
@@ -907,6 +981,10 @@ private struct AdminRoomFormSheet: View {
                     .foregroundStyle(AegisColors.teal)
 
                 FormTextField(title: "Room Name", text: $draft.name)
+
+                if let errorText {
+                    SheetErrorText(message: errorText)
+                }
             }
             .padding(24)
 
@@ -928,8 +1006,12 @@ private struct AdminRoomFormSheet: View {
 
                 Button(draft.submitTitle) {
                     Task {
-                        if await onSave(draft) {
+                        switch await onSave(draft) {
+                        case .success:
+                            errorText = nil
                             dismiss()
+                        case let .failure(message):
+                            errorText = message
                         }
                     }
                 }
@@ -938,18 +1020,19 @@ private struct AdminRoomFormSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 460, height: 260)
+        .frame(width: 460, height: 260 + (errorText == nil ? 0 : 40))
     }
 }
 
 private struct AdminBeaconFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AdminBeaconForm
+    @State private var errorText: String?
     let rooms: [Room]
     let isSaving: Bool
-    let onSave: (AdminBeaconForm) async -> Bool
+    let onSave: (AdminBeaconForm) async -> ActionOutcome
 
-    init(form: AdminBeaconForm, rooms: [Room], isSaving: Bool, onSave: @escaping (AdminBeaconForm) async -> Bool) {
+    init(form: AdminBeaconForm, rooms: [Room], isSaving: Bool, onSave: @escaping (AdminBeaconForm) async -> ActionOutcome) {
         self._draft = State(initialValue: form)
         self.rooms = rooms
         self.isSaving = isSaving
@@ -988,6 +1071,10 @@ private struct AdminBeaconFormSheet: View {
                     .labelsHidden()
                     .frame(width: 220)
                 }
+
+                if let errorText {
+                    SheetErrorText(message: errorText)
+                }
             }
             .padding(24)
 
@@ -1009,8 +1096,12 @@ private struct AdminBeaconFormSheet: View {
 
                 Button(draft.submitTitle) {
                     Task {
-                        if await onSave(draft) {
+                        switch await onSave(draft) {
+                        case .success:
+                            errorText = nil
                             dismiss()
+                        case let .failure(message):
+                            errorText = message
                         }
                     }
                 }
@@ -1019,7 +1110,20 @@ private struct AdminBeaconFormSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 620, height: 340)
+        .frame(width: 620, height: 340 + (errorText == nil ? 0 : 40))
+    }
+}
+
+/// Inline validation/save error shown inside a form sheet, so the sheet can
+/// stay open with the user's input intact.
+private struct SheetErrorText: View {
+    let message: String
+
+    var body: some View {
+        Label(message, systemImage: "exclamationmark.triangle.fill")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color.red)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1114,8 +1218,28 @@ struct ReportsView: View {
 
     private var reportFields: some View {
         VStack(alignment: .leading, spacing: 16) {
-            FormTextField(title: "Date", text: $viewModel.dateText)
-                .frame(width: 190)
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Specific Date", isOn: $viewModel.useCustomDate)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(AegisColors.mutedText)
+
+                if viewModel.useCustomDate {
+                    DatePicker(
+                        "Date",
+                        selection: $viewModel.rollupDate,
+                        displayedComponents: .date
+                    )
+                    .labelsHidden()
+                    .datePickerStyle(.field)
+                } else {
+                    Text("Defaults to yesterday")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AegisColors.mutedText)
+                }
+            }
+            .frame(width: 190, alignment: .leading)
+
             FormTextField(title: "User ID", text: $viewModel.userIDText)
                 .frame(width: 190)
         }

@@ -34,6 +34,25 @@ enum LoadState: Equatable {
     case failed(String)
 }
 
+/// The result of a user-triggered mutation (create/update/delete/reset).
+/// Views color and place the message based on the case, never on the text.
+enum ActionOutcome: Equatable {
+    case success(String)
+    case failure(String)
+
+    var text: String {
+        switch self {
+        case let .success(text), let .failure(text):
+            return text
+        }
+    }
+
+    var isSuccess: Bool {
+        if case .success = self { return true }
+        return false
+    }
+}
+
 struct UserSession: Codable, Equatable {
     let id: Int
     let username: String
@@ -288,6 +307,15 @@ struct AdminBeaconsPage: Equatable {
     let total: Int
     let page: Int
     let perPage: Int
+}
+
+/// Per-room beacon rollup used only by the Rooms tab. Kept separate from the
+/// Beacons tab's paginated, filtered list so the two tabs never clobber each
+/// other's data.
+struct RoomBeaconSummary: Equatable {
+    var count: Int
+
+    var hasBeacons: Bool { count > 0 }
 }
 
 struct AdminBeaconForm: Identifiable, Equatable {

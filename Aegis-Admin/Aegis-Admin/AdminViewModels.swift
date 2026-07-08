@@ -214,6 +214,8 @@ final class SettingsViewModel: ObservableObject {
 @MainActor
 final class AdministrationViewModel: ObservableObject {
     @Published var selectedMode: AdministrationMode = .users
+
+    // MARK: Users tab state
     @Published var users: [AdminUser] = []
     @Published var total = 0
     @Published var page = 1
@@ -223,20 +225,33 @@ final class AdministrationViewModel: ObservableObject {
     @Published var sessionFilter: SessionFilter = .all
     @Published var includeInactive = false
     @Published var state: LoadState = .idle
-    @Published var actionMessage: String?
+    @Published var actionMessage: ActionOutcome?
     @Published var isSaving = false
+
+    // MARK: Rooms tab state
     @Published var rooms: [Room] = []
     @Published var roomState: LoadState = .idle
-    @Published var roomActionMessage: String?
+    @Published var roomActionMessage: ActionOutcome?
+    /// Per-room beacon rollup owned by the Rooms tab. Never written by the
+    /// Beacons tab, so switching tabs cannot corrupt the room counts.
+    @Published var roomBeaconSummary: [Int: RoomBeaconSummary] = [:]
+
+    // MARK: Beacons tab state (paginated, filtered list slice)
     @Published var beacons: [AdminBeacon] = []
     @Published var beaconState: LoadState = .idle
-    @Published var beaconActionMessage: String?
+    @Published var beaconActionMessage: ActionOutcome?
     @Published var beaconSearchText = ""
     @Published var beaconAssignmentFilter: BeaconAssignmentFilter = .all
     @Published var beaconRoomFilterID: Int?
     @Published var beaconTotal = 0
     @Published var beaconPage = 1
     @Published var beaconPerPage = 20
+
+    // One in-flight load per tab slice; a new intent cancels the prior one
+    // so a slow, stale response can never overwrite fresher state.
+    private var usersLoadTask: Task<Void, Never>?
+    private var roomsLoadTask: Task<Void, Never>?
+    private var beaconsLoadTask: Task<Void, Never>?
 
     var canGoPrevious: Bool { page > 1 }
     var canGoNext: Bool { page * perPage < total }
@@ -269,88 +284,82 @@ final class AdministrationViewModel: ObservableObject {
 
     func selectMode(_ mode: AdministrationMode, sessionStore: SessionStore) {
         selectedMode = mode
-        Task {
-            switch mode {
-            case .users:
-                if state == .idle {
-                    await load(sessionStore: sessionStore)
-                }
-            case .rooms:
-                if roomState == .idle {
-                    await loadRooms(sessionStore: sessionStore)
-                }
-            case .beacons:
-                if beaconState == .idle {
-                    await loadBeacons(sessionStore: sessionStore)
-                }
-            }
+        // Always refetch the newly selected tab so it never shows stale data
+        // (e.g. after another tab's mutation changed shared backend records).
+        switch mode {
+        case .users:
+            Task { await load(sessionStore: sessionStore) }
+        case .rooms:
+            Task { await loadRooms(sessionStore: sessionStore) }
+        case .beacons:
+            Task { await loadBeacons(sessionStore: sessionStore) }
         }
     }
 
+    // MARK: Users tab
+
     func load(sessionStore: SessionStore) async {
         state = .loading
-        await fetch(sessionStore: sessionStore)
+        await runUsersFetch(sessionStore: sessionStore)
     }
 
     func applyFilters(sessionStore: SessionStore) async {
         page = 1
-        await fetch(sessionStore: sessionStore)
+        await runUsersFetch(sessionStore: sessionStore)
     }
 
     func nextPage(sessionStore: SessionStore) async {
         guard canGoNext else { return }
         page += 1
-        await fetch(sessionStore: sessionStore)
+        await runUsersFetch(sessionStore: sessionStore)
     }
 
     func previousPage(sessionStore: SessionStore) async {
         guard canGoPrevious else { return }
         page -= 1
-        await fetch(sessionStore: sessionStore)
+        await runUsersFetch(sessionStore: sessionStore)
     }
 
-    func save(form: AdminUserForm, sessionStore: SessionStore) async -> Bool {
-        guard form.canSubmit else {
-            actionMessage = "Please complete the required fields."
-            return false
+    func save(form: AdminUserForm, sessionStore: SessionStore) async -> ActionOutcome {
+        if let message = FormValidators.validate(userForm: form) {
+            return .failure(message)
         }
         isSaving = true
         actionMessage = nil
+        defer { isSaving = false }
         do {
+            let outcome: ActionOutcome
             if let userID = form.userID {
                 _ = try await sessionStore.updateAdminUser(id: userID, form: form)
-                actionMessage = "User updated"
+                outcome = .success("User updated")
             } else {
                 _ = try await sessionStore.createAdminUser(form)
-                actionMessage = "User created"
+                outcome = .success("User created")
             }
-            await fetch(sessionStore: sessionStore)
-            isSaving = false
-            return true
+            actionMessage = outcome
+            await runUsersFetch(sessionStore: sessionStore)
+            return outcome
         } catch {
-            actionMessage = readableMessage(for: error)
-            state = .failed(readableMessage(for: error))
-            isSaving = false
-            return false
+            // The sheet shows the failure inline; the list data is still
+            // valid, so the background list state must not become .failed.
+            return .failure(readableMessage(for: error))
         }
     }
 
-    func resetPassword(user: AdminUser, newPassword: String, sessionStore: SessionStore) async -> Bool {
-        guard !newPassword.isEmpty else {
-            actionMessage = "Enter a new password."
-            return false
+    func resetPassword(user: AdminUser, newPassword: String, sessionStore: SessionStore) async -> ActionOutcome {
+        if let message = FormValidators.validatePassword(newPassword) {
+            return .failure(message)
         }
         isSaving = true
         actionMessage = nil
+        defer { isSaving = false }
         do {
             try await sessionStore.resetAdminUserPassword(id: user.id, newPassword: newPassword)
-            actionMessage = "Password reset"
-            isSaving = false
-            return true
+            let outcome = ActionOutcome.success("Password reset")
+            actionMessage = outcome
+            return outcome
         } catch {
-            actionMessage = readableMessage(for: error)
-            isSaving = false
-            return false
+            return .failure(readableMessage(for: error))
         }
     }
 
@@ -359,10 +368,10 @@ final class AdministrationViewModel: ObservableObject {
         actionMessage = nil
         do {
             try await sessionStore.deleteAdminUser(id: user.id)
-            actionMessage = "User deactivated"
-            await fetch(sessionStore: sessionStore)
+            actionMessage = .success("User deactivated")
+            await runUsersFetch(sessionStore: sessionStore)
         } catch {
-            actionMessage = readableMessage(for: error)
+            actionMessage = .failure(readableMessage(for: error))
         }
         isSaving = false
     }
@@ -372,42 +381,42 @@ final class AdministrationViewModel: ObservableObject {
         actionMessage = nil
         do {
             try await sessionStore.reactivateAdminUser(id: user.id)
-            actionMessage = "User reactivated"
-            await fetch(sessionStore: sessionStore)
+            actionMessage = .success("User reactivated")
+            await runUsersFetch(sessionStore: sessionStore)
         } catch {
-            actionMessage = readableMessage(for: error)
+            actionMessage = .failure(readableMessage(for: error))
         }
         isSaving = false
     }
 
+    // MARK: Rooms tab
+
     func loadRooms(sessionStore: SessionStore) async {
         roomState = .loading
-        await fetchRoomsAndBeaconSummary(sessionStore: sessionStore)
+        await runRoomsFetch(sessionStore: sessionStore)
     }
 
-    func saveRoom(form: AdminRoomForm, sessionStore: SessionStore) async -> Bool {
-        guard form.canSubmit else {
-            roomActionMessage = "Enter a room name."
-            return false
+    func saveRoom(form: AdminRoomForm, sessionStore: SessionStore) async -> ActionOutcome {
+        if let message = FormValidators.validate(roomForm: form) {
+            return .failure(message)
         }
         isSaving = true
         roomActionMessage = nil
+        defer { isSaving = false }
         do {
+            let outcome: ActionOutcome
             if let roomID = form.roomID {
                 _ = try await sessionStore.updateRoom(id: roomID, form: form)
-                roomActionMessage = "Room updated"
+                outcome = .success("Room updated")
             } else {
                 _ = try await sessionStore.createRoom(form)
-                roomActionMessage = "Room created"
+                outcome = .success("Room created")
             }
-            await fetchRoomsAndBeaconSummary(sessionStore: sessionStore)
-            isSaving = false
-            return true
+            roomActionMessage = outcome
+            await runRoomsFetch(sessionStore: sessionStore)
+            return outcome
         } catch {
-            roomActionMessage = readableMessage(for: error)
-            roomState = .failed(readableMessage(for: error))
-            isSaving = false
-            return false
+            return .failure(readableMessage(for: error))
         }
     }
 
@@ -416,59 +425,59 @@ final class AdministrationViewModel: ObservableObject {
         roomActionMessage = nil
         do {
             try await sessionStore.deleteRoom(id: room.id)
-            roomActionMessage = "Room deleted"
-            await fetchRoomsAndBeaconSummary(sessionStore: sessionStore)
+            roomActionMessage = .success("Room deleted")
+            await runRoomsFetch(sessionStore: sessionStore)
         } catch {
-            roomActionMessage = readableMessage(for: error)
+            roomActionMessage = .failure(readableMessage(for: error))
         }
         isSaving = false
     }
 
+    // MARK: Beacons tab
+
     func loadBeacons(sessionStore: SessionStore) async {
         beaconState = .loading
-        await fetchRoomsAndBeacons(sessionStore: sessionStore)
+        await runBeaconsFetch(sessionStore: sessionStore)
     }
 
     func applyBeaconFilters(sessionStore: SessionStore) async {
         beaconPage = 1
-        await fetchRoomsAndBeacons(sessionStore: sessionStore)
+        await runBeaconsFetch(sessionStore: sessionStore)
     }
 
     func nextBeaconPage(sessionStore: SessionStore) async {
         guard canGoNextBeaconPage else { return }
         beaconPage += 1
-        await fetchRoomsAndBeacons(sessionStore: sessionStore)
+        await runBeaconsFetch(sessionStore: sessionStore)
     }
 
     func previousBeaconPage(sessionStore: SessionStore) async {
         guard canGoPreviousBeaconPage else { return }
         beaconPage -= 1
-        await fetchRoomsAndBeacons(sessionStore: sessionStore)
+        await runBeaconsFetch(sessionStore: sessionStore)
     }
 
-    func saveBeacon(form: AdminBeaconForm, sessionStore: SessionStore) async -> Bool {
-        guard form.canSubmit else {
-            beaconActionMessage = "Complete beacon name and identifier."
-            return false
+    func saveBeacon(form: AdminBeaconForm, sessionStore: SessionStore) async -> ActionOutcome {
+        if let message = FormValidators.validate(beaconForm: form) {
+            return .failure(message)
         }
         isSaving = true
         beaconActionMessage = nil
+        defer { isSaving = false }
         do {
+            let outcome: ActionOutcome
             if let beaconID = form.beaconID {
                 _ = try await sessionStore.updateAdminBeacon(id: beaconID, form: form)
-                beaconActionMessage = "Beacon updated"
+                outcome = .success("Beacon updated")
             } else {
                 _ = try await sessionStore.createAdminBeacon(form)
-                beaconActionMessage = "Beacon registered"
+                outcome = .success("Beacon registered")
             }
-            await fetchRoomsAndBeacons(sessionStore: sessionStore)
-            isSaving = false
-            return true
+            beaconActionMessage = outcome
+            await runBeaconsFetch(sessionStore: sessionStore)
+            return outcome
         } catch {
-            beaconActionMessage = readableMessage(for: error)
-            beaconState = .failed(readableMessage(for: error))
-            isSaving = false
-            return false
+            return .failure(readableMessage(for: error))
         }
     }
 
@@ -477,78 +486,168 @@ final class AdministrationViewModel: ObservableObject {
         beaconActionMessage = nil
         do {
             try await sessionStore.deleteAdminBeacon(id: beacon.id)
-            beaconActionMessage = "Beacon deleted"
-            await fetchRoomsAndBeacons(sessionStore: sessionStore)
+            beaconActionMessage = .success("Beacon deleted")
+            await runBeaconsFetch(sessionStore: sessionStore)
         } catch {
-            beaconActionMessage = readableMessage(for: error)
+            beaconActionMessage = .failure(readableMessage(for: error))
         }
         isSaving = false
     }
 
     func beaconCount(for room: Room) -> Int {
-        beacons.filter { $0.roomID == room.id }.count
+        roomBeaconSummary[room.id]?.count ?? 0
     }
 
     func beaconStatus(for room: Room) -> String {
-        beaconCount(for: room) > 0 ? "Assigned" : "No beacons"
+        (roomBeaconSummary[room.id]?.hasBeacons ?? false) ? "Assigned" : "No beacons"
     }
 
-    private func fetch(sessionStore: SessionStore) async {
+    // MARK: Load task management
+
+    /// Cancels any in-flight users fetch and starts a fresh one, so a slow
+    /// response for an old page/filter can never overwrite newer state.
+    private func runUsersFetch(sessionStore: SessionStore) async {
+        usersLoadTask?.cancel()
+        let task = Task { await self.fetchUsers(sessionStore: sessionStore) }
+        usersLoadTask = task
+        await task.value
+    }
+
+    private func runRoomsFetch(sessionStore: SessionStore) async {
+        roomsLoadTask?.cancel()
+        let task = Task { await self.fetchRoomsAndBeaconSummary(sessionStore: sessionStore) }
+        roomsLoadTask = task
+        await task.value
+    }
+
+    private func runBeaconsFetch(sessionStore: SessionStore) async {
+        beaconsLoadTask?.cancel()
+        let task = Task { await self.fetchRoomsAndBeacons(sessionStore: sessionStore) }
+        beaconsLoadTask = task
+        await task.value
+    }
+
+    private static func lastValidPage(total: Int, perPage: Int) -> Int {
+        let size = max(perPage, 1)
+        return max(1, Int((Double(total) / Double(size)).rounded(.up)))
+    }
+
+    // MARK: Fetching
+
+    private func fetchUsers(sessionStore: SessionStore) async {
         do {
-            let result = try await sessionStore.adminUsers(
-                search: searchText,
+            var result = try await sessionStore.adminUsers(
+                search: FormValidators.sanitizedSearchTerm(searchText),
                 roleFilter: roleFilter,
                 sessionFilter: sessionFilter,
                 includeInactive: includeInactive,
                 page: page,
                 perPage: perPage
             )
+            try Task.checkCancellation()
+            // Clamp: after deletes (or a shrunken result set) the current
+            // page can fall past the end; refetch at the last valid page.
+            let lastPage = Self.lastValidPage(total: result.total, perPage: result.perPage)
+            if result.page > lastPage {
+                result = try await sessionStore.adminUsers(
+                    search: FormValidators.sanitizedSearchTerm(searchText),
+                    roleFilter: roleFilter,
+                    sessionFilter: sessionFilter,
+                    includeInactive: includeInactive,
+                    page: lastPage,
+                    perPage: perPage
+                )
+                try Task.checkCancellation()
+            }
             users = result.users
             total = result.total
             page = result.page
             perPage = result.perPage
             state = users.isEmpty ? .empty : .loaded
+        } catch is CancellationError {
+            // Superseded by a newer fetch; let it own the state.
         } catch {
+            guard !Task.isCancelled else { return }
             state = .failed(readableMessage(for: error))
         }
     }
 
+    /// Rooms tab load: room list plus a full beacon rollup. Writes ONLY the
+    /// Rooms tab slice (`rooms`, `roomBeaconSummary`, `roomState`); the
+    /// Beacons tab's paginated list is untouched. Pages through beacons in
+    /// batches of 100 so counts stay correct past the first page.
     private func fetchRoomsAndBeaconSummary(sessionStore: SessionStore) async {
         do {
-            async let rooms = sessionStore.rooms()
-            async let beacons = sessionStore.adminBeacons(
-                assignmentFilter: .all,
-                roomID: nil,
-                page: 1,
-                perPage: 100
-            )
-            self.rooms = try await rooms
-            let beaconPage = try await beacons
-            self.beacons = beaconPage.beacons
-            self.beaconTotal = beaconPage.total
-            roomState = self.rooms.isEmpty ? .empty : .loaded
+            let rooms = try await sessionStore.rooms()
+            try Task.checkCancellation()
+
+            var summary: [Int: RoomBeaconSummary] = [:]
+            var accumulated = 0
+            var expectedTotal = Int.max
+            var pageIndex = 1
+            while accumulated < expectedTotal {
+                let batch = try await sessionStore.adminBeacons(
+                    assignmentFilter: .all,
+                    roomID: nil,
+                    page: pageIndex,
+                    perPage: 100
+                )
+                try Task.checkCancellation()
+                expectedTotal = batch.total
+                accumulated += batch.beacons.count
+                for beacon in batch.beacons {
+                    guard let roomID = beacon.roomID else { continue }
+                    summary[roomID, default: RoomBeaconSummary(count: 0)].count += 1
+                }
+                // Defensive: an empty page means the backend has no more
+                // rows even if `total` disagrees; avoid looping forever.
+                if batch.beacons.isEmpty { break }
+                pageIndex += 1
+            }
+
+            self.rooms = rooms
+            self.roomBeaconSummary = summary
+            roomState = rooms.isEmpty ? .empty : .loaded
+        } catch is CancellationError {
+            // Superseded by a newer fetch; let it own the state.
         } catch {
+            guard !Task.isCancelled else { return }
             roomState = .failed(readableMessage(for: error))
         }
     }
 
     private func fetchRoomsAndBeacons(sessionStore: SessionStore) async {
         do {
-            async let rooms = sessionStore.rooms()
-            async let beacons = sessionStore.adminBeacons(
+            async let roomsRequest = sessionStore.rooms()
+            async let beaconsRequest = sessionStore.adminBeacons(
                 assignmentFilter: beaconAssignmentFilter,
                 roomID: beaconRoomFilterID,
                 page: beaconPage,
                 perPage: beaconPerPage
             )
-            self.rooms = try await rooms
-            let result = try await beacons
+            let rooms = try await roomsRequest
+            var result = try await beaconsRequest
+            try Task.checkCancellation()
+            let lastPage = Self.lastValidPage(total: result.total, perPage: result.perPage)
+            if result.page > lastPage {
+                result = try await sessionStore.adminBeacons(
+                    assignmentFilter: beaconAssignmentFilter,
+                    roomID: beaconRoomFilterID,
+                    page: lastPage,
+                    perPage: beaconPerPage
+                )
+                try Task.checkCancellation()
+            }
+            self.rooms = rooms
             self.beacons = result.beacons
             self.beaconTotal = result.total
             self.beaconPage = result.page
             self.beaconPerPage = result.perPage
             beaconState = self.beacons.isEmpty ? .empty : .loaded
+        } catch is CancellationError {
+            // Superseded by a newer fetch; let it own the state.
         } catch {
+            guard !Task.isCancelled else { return }
             beaconState = .failed(readableMessage(for: error))
         }
     }
@@ -556,33 +655,38 @@ final class AdministrationViewModel: ObservableObject {
 
 @MainActor
 final class ReportsViewModel: ObservableObject {
-    @Published var dateText = ""
+    /// When false the backend defaults to "yesterday" in its own timezone.
+    @Published var useCustomDate = false
+    @Published var rollupDate = Date()
     @Published var userIDText = ""
     @Published var result: RollupResult?
     @Published var state: LoadState = .idle
     @Published var isRunning = false
     @Published var message: String?
 
+    private static let rollupDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
     func runRollup(sessionStore: SessionStore) async {
         isRunning = true
         message = nil
         result = nil
         do {
-            let trimmedDate = dateText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let trimmedUserID = userIDText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let userID: Int?
-            if trimmedUserID.isEmpty {
-                userID = nil
-            } else if let parsed = Int(trimmedUserID), parsed > 0 {
-                userID = parsed
-            } else {
-                message = "User ID must be a positive number."
-                state = .failed(message ?? "Invalid user ID.")
+            if let validationMessage = FormValidators.validateOptionalUserID(userIDText) {
+                message = validationMessage
+                state = .failed(validationMessage)
                 isRunning = false
                 return
             }
+            let trimmedUserID = userIDText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let userID = trimmedUserID.isEmpty ? nil : Int(trimmedUserID)
+            let dateString = useCustomDate ? Self.rollupDateFormatter.string(from: rollupDate) : nil
             let output = try await sessionStore.runRollup(
-                date: trimmedDate.isEmpty ? nil : trimmedDate,
+                date: dateString,
                 userID: userID
             )
             result = output
