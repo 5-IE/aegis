@@ -134,12 +134,12 @@ describe('GET /beacons', () => {
     const { app, token } = await buildTestApp();
     const dq = await import('../../src/db/queries/deviceQueries.js');
     (dq.listAssignedDevices as any).mockResolvedValue([
-      { id_device: 1, identifier: '1:2', id_room: 3, room_name: 'Lab' },
+      { id_device: 1, identifier: '1:2', id_room: 3, position_x: 2.5, position_y: 5.0, room_name: 'Lab' },
     ]);
     const res = await request(app).get('/api/v1/beacons').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.list).toEqual([
-      { beacon_identifier: '1:2', room_id: 3, room_name: 'Lab' },
+      { beacon_identifier: '1:2', room_id: 3, position_x: 2.5, position_y: 5.0, room_name: 'Lab' },
     ]);
   });
 });

@@ -308,13 +308,20 @@ Response:
 ```json
 {
   "list": [
-    { "beacon_identifier": "1:2", "room_id": 3, "room_name": "Lab 3.02" },
-    { "beacon_identifier": "1:3", "room_id": 4, "room_name": "Lab 3.03" }
+    { "beacon_identifier": "1:2", "room_id": 3, "position_x": 2.50, "position_y": 5.00, "room_name": "Lab 3.02" },
+    { "beacon_identifier": "1:3", "room_id": 4, "position_x": 0.00, "position_y": 1.25, "room_name": "Lab 3.03" }
   ]
 }
 ```
 
-Store this as `[beacon_identifier: room_id]` in memory. Re-fetch on app foreground if the mapping might have changed (rare).
+Each entry gives the beacon's identifier (`"major:minor"`), its room, and its
+`position_x` / `position_y` within that room (metres from the room origin; may
+be `null` if the beacon hasn't been placed). Store this mapping in memory; the
+positions feed on-device trilateration. Admins receive the same shape via
+`GET /api/v1/admin/beacons` (which also includes `id` and `name`). Positions are
+set by admins through `POST` / `PATCH /api/v1/admin/beacons`
+(`position_x` / `position_y`, both optional). Re-fetch on app foreground if the
+mapping might have changed (rare).
 
 ### Phase B (on every beacon detection while the app is running)
 
