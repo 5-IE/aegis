@@ -6,7 +6,7 @@ final class LoginViewModel: ObservableObject {
     @Published var username = ""
     @Published var password = ""
     @Published var isSigningIn = false
-    @Published var disabledFeatureMessage: String?
+    @Published var validationMessage: String?
 
     var canSubmit: Bool {
         !isSigningIn
@@ -14,16 +14,17 @@ final class LoginViewModel: ObservableObject {
 
     func signIn(sessionStore: SessionStore) async {
         guard canSubmit else { return }
-        disabledFeatureMessage = nil
+        validationMessage = nil
+        sessionStore.clearAuthError()
 
         let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedUsername.isEmpty else {
-            disabledFeatureMessage = "Enter your email or phone."
+            validationMessage = "Enter your email or phone."
             return
         }
 
         guard !password.isEmpty else {
-            disabledFeatureMessage = "Enter your password."
+            validationMessage = "Enter your password."
             return
         }
 

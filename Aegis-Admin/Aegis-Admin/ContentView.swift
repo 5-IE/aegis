@@ -148,16 +148,8 @@ private struct LoginView: View {
             )
             .padding(.bottom, 10)
 
-            HStack {
-                Spacer()
-                Button("Forgot Password?") {
-                    viewModel.disabledFeatureMessage = "Password reset is not available yet."
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AegisColors.teal)
-            }
-            .padding(.bottom, 27)
+            Spacer()
+                .frame(height: 27)
 
             Button {
                 Task { await viewModel.signIn(sessionStore: sessionStore) }
@@ -185,24 +177,16 @@ private struct LoginView: View {
             .opacity(viewModel.canSubmit ? 1 : 0.58)
             .padding(.bottom, 28)
 
-            HStack(spacing: 4) {
-                Spacer()
-                Text("Don't have account?")
-                    .foregroundStyle(AegisColors.mutedText)
-                Button("Sign Up") {
-                    viewModel.disabledFeatureMessage = "Account registration is not available yet."
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(AegisColors.teal)
-                .fontWeight(.bold)
-                Spacer()
-            }
-            .font(.system(size: 12, weight: .semibold))
-
-            if let error = sessionStore.authError ?? viewModel.disabledFeatureMessage {
+            if let error = sessionStore.authError ?? viewModel.validationMessage {
                 Text(error)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color(red: 0.75, green: 0.12, blue: 0.12))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
+            } else if let notice = sessionStore.signedOutReason?.message {
+                Text(notice)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AegisColors.mutedText)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 20)
             }
