@@ -14,14 +14,14 @@ struct ContentView: View {
                 AdminShellView(sessionStore: sessionStore, user: user)
             }
         }
-        .frame(minWidth: 1120, minHeight: 760)
+        .frame(minWidth: 920, minHeight: 640)
         .task {
             await sessionStore.restoreSession()
         }
     }
 }
 
-private enum AegisColors {
+enum AegisColors {
     static let ink = Color(red: 0.04, green: 0.05, blue: 0.06)
     static let mutedText = Color(red: 0.42, green: 0.45, blue: 0.46)
     static let teal = Color(red: 0.30, green: 0.42, blue: 0.45)
@@ -76,106 +76,192 @@ private struct LoginView: View {
     @StateObject private var viewModel = LoginViewModel()
 
     var body: some View {
-        HStack(spacing: 64) {
-            VStack(alignment: .leading, spacing: 0) {
-                Spacer()
+        GeometryReader { proxy in
+            let layout = LoginLayout(size: proxy.size)
 
-                Text("Welcome to Aegis")
-                    .font(.system(size: 31, weight: .bold))
-                    .foregroundStyle(.black)
-                    .padding(.bottom, 12)
+            if layout.usesCompactLayout {
+                compactLayout(layout)
+            } else {
+                wideLayout(layout)
+            }
+        }
+        .background(Color.white.ignoresSafeArea())
+        .ignoresSafeArea()
+    }
 
-                Text("Login to manage your account")
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(AegisColors.mutedText)
-                    .padding(.bottom, 28)
+    private func wideLayout(_ layout: LoginLayout) -> some View {
+        HStack(spacing: 0) {
+            loginForm
+                .frame(width: layout.formWidth, alignment: .leading)
+                .frame(width: layout.leftPaneWidth)
+                .frame(maxHeight: .infinity, alignment: .center)
 
-                LoginInputField(
-                    icon: "person",
-                    placeholder: "Enter your email or phone",
-                    text: $viewModel.username
-                )
-                .padding(.bottom, 16)
+            wideLoginHero
+                .frame(width: layout.heroWidth)
+                .frame(maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 
-                LoginSecureField(
-                    icon: "lock",
-                    placeholder: "Enter your password",
-                    text: $viewModel.password
-                )
-                .padding(.bottom, 10)
+    private func compactLayout(_ layout: LoginLayout) -> some View {
+        ScrollView {
+            VStack(spacing: 32) {
+                loginForm
+                    .frame(width: layout.compactFormWidth, alignment: .leading)
 
-                HStack {
-                    Spacer()
-                    Button("Forgot Password?") {
-                        viewModel.disabledFeatureMessage = "Password reset is not available yet."
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AegisColors.teal)
-                }
-                .padding(.bottom, 27)
+                loginHero
+                    .frame(maxWidth: .infinity)
+                    .frame(height: layout.compactHeroHeight)
+            }
+            .padding(.horizontal, layout.compactHorizontalPadding)
+            .padding(.vertical, 32)
+            .frame(maxWidth: .infinity)
+        }
+    }
 
-                Button {
-                    Task { await viewModel.signIn(sessionStore: sessionStore) }
-                } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(AegisColors.teal)
-                            .shadow(color: Color.black.opacity(0.20), radius: 4, x: 0, y: 2)
+    private var loginForm: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Welcome to Aegis")
+                .font(.system(size: 31, weight: .bold))
+                .foregroundStyle(.black)
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+                .padding(.bottom, 12)
 
-                        if viewModel.isSigningIn {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.white)
-                        } else {
-                            Text("SIGN IN")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
-                    }
-                    .frame(height: 48)
-                }
-                .buttonStyle(.plain)
-                .disabled(!viewModel.canSubmit)
-                .opacity(viewModel.canSubmit ? 1 : 0.58)
+            Text("Login to manage your account")
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(AegisColors.mutedText)
+                .lineLimit(1)
                 .padding(.bottom, 28)
 
-                HStack(spacing: 4) {
-                    Spacer()
-                    Text("Don't have account?")
-                        .foregroundStyle(AegisColors.mutedText)
-                    Button("Sign Up") {
-                        viewModel.disabledFeatureMessage = "Account registration is not available yet."
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AegisColors.teal)
-                    .fontWeight(.bold)
-                    Spacer()
+            LoginInputField(
+                icon: "person",
+                placeholder: "Enter your email or phone",
+                text: $viewModel.username
+            )
+            .padding(.bottom, 16)
+
+            LoginSecureField(
+                icon: "lock",
+                placeholder: "Enter your password",
+                text: $viewModel.password
+            )
+            .padding(.bottom, 10)
+
+            HStack {
+                Spacer()
+                Button("Forgot Password?") {
+                    viewModel.disabledFeatureMessage = "Password reset is not available yet."
                 }
+                .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AegisColors.teal)
+            }
+            .padding(.bottom, 27)
 
-                if let error = sessionStore.authError ?? viewModel.disabledFeatureMessage {
-                    Text(error)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color(red: 0.75, green: 0.12, blue: 0.12))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 20)
+            Button {
+                Task { await viewModel.signIn(sessionStore: sessionStore) }
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(AegisColors.teal)
+                        .shadow(color: Color.black.opacity(0.20), radius: 4, x: 0, y: 2)
+
+                    if viewModel.isSigningIn {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                    } else {
+                        Text("SIGN IN")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+            }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.canSubmit)
+            .opacity(viewModel.canSubmit ? 1 : 0.58)
+            .padding(.bottom, 28)
 
+            HStack(spacing: 4) {
+                Spacer()
+                Text("Don't have account?")
+                    .foregroundStyle(AegisColors.mutedText)
+                Button("Sign Up") {
+                    viewModel.disabledFeatureMessage = "Account registration is not available yet."
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AegisColors.teal)
+                .fontWeight(.bold)
                 Spacer()
             }
-            .frame(width: 440)
+            .font(.system(size: 12, weight: .semibold))
 
-            Image("LoginHero")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 540, height: 700)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .clipped()
+            if let error = sessionStore.authError ?? viewModel.disabledFeatureMessage {
+                Text(error)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.75, green: 0.12, blue: 0.12))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
+            }
         }
-        .padding(.horizontal, 56)
-        .padding(.vertical, 28)
-        .background(Color.white)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var loginHero: some View {
+        Image("LoginHero")
+            .resizable()
+            .scaledToFill()
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipped()
+    }
+
+    private var wideLoginHero: some View {
+        Image("LoginHero")
+            .resizable()
+            .scaledToFill()
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 22,
+                    bottomLeadingRadius: 22,
+                    style: .continuous
+                )
+            )
+            .clipped()
+    }
+}
+
+private struct LoginLayout {
+    let size: CGSize
+
+    var usesCompactLayout: Bool {
+        size.width < 940 || size.height < 600
+    }
+
+    var compactHorizontalPadding: CGFloat {
+        size.width < 520 ? 24 : 44
+    }
+
+    var leftPaneWidth: CGFloat {
+        size.width * 0.5
+    }
+
+    var heroWidth: CGFloat {
+        size.width - leftPaneWidth
+    }
+
+    var formWidth: CGFloat {
+        min(max(leftPaneWidth * 0.68, 340), 520)
+    }
+
+    var compactFormWidth: CGFloat {
+        min(460, max(280, size.width - (compactHorizontalPadding * 2)))
+    }
+
+    var compactHeroHeight: CGFloat {
+        min(420, max(260, size.height * 0.42))
     }
 }
 
@@ -196,6 +282,7 @@ private struct LoginInputField: View {
                 .font(.system(size: 13, weight: .medium))
         }
         .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity)
         .frame(height: 46)
         .background(Color.white)
         .overlay {
@@ -222,6 +309,7 @@ private struct LoginSecureField: View {
                 .font(.system(size: 13, weight: .medium))
         }
         .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity)
         .frame(height: 46)
         .background(Color.white)
         .overlay {
@@ -237,6 +325,8 @@ private struct AdminShellView: View {
     @State private var selectedSection: AdminSection = .dashboard
     @StateObject private var dashboardViewModel = DashboardViewModel()
     @StateObject private var liveRadarViewModel = LiveRadarViewModel()
+    @StateObject private var administrationViewModel = AdministrationViewModel()
+    @StateObject private var reportsViewModel = ReportsViewModel()
     @StateObject private var settingsViewModel = SettingsViewModel()
 
     var body: some View {
@@ -264,9 +354,13 @@ private struct AdminShellView: View {
         case .liveRadar:
             LiveRadarView(viewModel: liveRadarViewModel, sessionStore: sessionStore)
         case .administration:
-            ComingSoonView(title: "Administration", icon: "person.2.fill")
+            AdministrationView(
+                viewModel: administrationViewModel,
+                sessionStore: sessionStore,
+                currentAdminID: user.id
+            )
         case .reports:
-            ComingSoonView(title: "Reports", icon: "doc.text.fill")
+            ReportsView(viewModel: reportsViewModel, sessionStore: sessionStore)
         case .settings:
             SettingsView(viewModel: settingsViewModel, sessionStore: sessionStore)
         }
@@ -378,6 +472,20 @@ private struct DashboardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
+            dashboardHeader
+            summaryCards
+            attendancePanel
+        }
+        .screenPadding()
+        .task {
+            if viewModel.state == .idle {
+                await viewModel.load(sessionStore: sessionStore)
+            }
+        }
+    }
+
+    private var dashboardHeader: some View {
+        ViewThatFits(in: .horizontal) {
             HStack {
                 Text("Dashboard")
                     .screenTitle()
@@ -385,60 +493,95 @@ private struct DashboardView: View {
                 DateChip(text: viewModel.formattedDate)
             }
 
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Dashboard")
+                    .screenTitle()
+                DateChip(text: viewModel.formattedDate)
+            }
+        }
+    }
+
+    private var summaryCards: some View {
+        ViewThatFits(in: .horizontal) {
             HStack(spacing: 36) {
                 PresentSummaryCard(summary: viewModel.summary)
+                    .frame(minWidth: 300)
                 AbsentSummaryCard(summary: viewModel.summary)
+                    .frame(minWidth: 300)
             }
             .frame(height: 132)
 
-            WhitePanel {
-                VStack(alignment: .leading, spacing: 15) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Daily Attendance Overview")
-                                .font(.system(size: 16, weight: .bold))
-                            Text(viewModel.shortDate)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AegisColors.mutedText)
-                        }
+            VStack(spacing: 18) {
+                PresentSummaryCard(summary: viewModel.summary)
+                    .frame(height: 132)
+                AbsentSummaryCard(summary: viewModel.summary)
+                    .frame(height: 132)
+            }
+        }
+    }
 
-                        Spacer()
-
-                        SearchField(text: $viewModel.searchText, placeholder: "Search by Name...")
-                            .frame(width: 210)
-                            .onSubmit {
-                                Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
-                            }
-
-                        Menu {
-                            Picker("Session", selection: $viewModel.sessionFilter) {
-                                ForEach(SessionFilter.allCases) { filter in
-                                    Text(filter.rawValue).tag(filter)
-                                }
-                            }
-                            Button("Apply") {
-                                Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
-                            }
-                        } label: {
-                            Image(systemName: "line.3.horizontal.decrease")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(AegisColors.teal)
-                                .frame(width: 30, height: 30)
-                                .background(Circle().fill(Color.white))
-                        }
-                        .menuStyle(.borderlessButton)
-                    }
-
-                    AttendanceTable(rows: viewModel.overviewRows, state: viewModel.state)
-                }
+    private var attendancePanel: some View {
+        WhitePanel {
+            VStack(alignment: .leading, spacing: 15) {
+                attendancePanelHeader
+                AttendanceTable(rows: viewModel.overviewRows, state: viewModel.state)
+                    .frame(minHeight: 180, maxHeight: .infinity)
             }
             .frame(maxHeight: .infinity)
         }
-        .screenPadding()
-        .task {
-            if viewModel.state == .idle {
-                await viewModel.load(sessionStore: sessionStore)
+        .frame(maxHeight: .infinity)
+    }
+
+    private var attendancePanelHeader: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top) {
+                attendanceTitle
+                Spacer()
+                attendanceControls
             }
+
+            VStack(alignment: .leading, spacing: 12) {
+                attendanceTitle
+                attendanceControls
+            }
+        }
+    }
+
+    private var attendanceTitle: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Daily Attendance Overview")
+                .font(.system(size: 16, weight: .bold))
+            Text(viewModel.shortDate)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AegisColors.mutedText)
+        }
+    }
+
+    private var attendanceControls: some View {
+        HStack(spacing: 12) {
+            SearchField(text: $viewModel.searchText, placeholder: "Search by Name...")
+                .frame(width: 210)
+                .onSubmit {
+                    Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
+                }
+
+            Menu {
+                Picker("Session", selection: $viewModel.sessionFilter) {
+                    ForEach(SessionFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                Button("Apply") {
+                    Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AegisColors.teal)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Color.white))
+            }
+            .menuStyle(.borderlessButton)
         }
     }
 }
@@ -541,29 +684,32 @@ private struct AttendanceTable: View {
             } else if rows.isEmpty {
                 TableMessage("No attendance data yet.")
             } else {
-                ForEach(rows) { row in
-                    HStack(spacing: 0) {
-                        Text(row.name).tableCell(maxWidth: .infinity, alignment: .leading)
-                        Text(row.session).tableCell(width: 110)
-                        Text(formatDateTime(row.clockedInAt)).tableCell(width: 130)
-                        Text(formatDateTime(row.clockedOutAt)).tableCell(width: 130)
-                        Text(row.status.titleCasedStatus)
-                            .foregroundStyle(statusColor(row.status))
-                            .tableCell(width: 110)
-                    }
-                    .frame(height: 46)
-                    .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(rows) { row in
+                            HStack(spacing: 0) {
+                                Text(row.name).tableCell(maxWidth: .infinity, alignment: .leading)
+                                Text(row.session).tableCell(width: 110)
+                                Text(formatDateTime(row.clockedInAt)).tableCell(width: 130)
+                                Text(formatDateTime(row.clockedOutAt)).tableCell(width: 130)
+                                Text(row.status.titleCasedStatus)
+                                    .foregroundStyle(statusColor(row.status))
+                                    .tableCell(width: 110)
+                            }
+                            .frame(height: 46)
+                            .overlay(alignment: .bottom) {
+                                Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                            }
+                        }
                     }
                 }
+                .frame(minHeight: 130, maxHeight: .infinity)
             }
 
             if case let .failed(message) = state {
                 ErrorBanner(message: message)
                     .padding(.top, 12)
             }
-
-            Spacer(minLength: 0)
         }
     }
 }
@@ -573,10 +719,43 @@ private struct LiveRadarView: View {
     @ObservedObject var sessionStore: SessionStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Live Radar")
-                .screenTitle()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Live Radar")
+                    .screenTitle()
 
+                roomTabs
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 20) {
+                        radarMainColumn
+                            .frame(minWidth: 520)
+                        metricsColumn
+                            .frame(width: 240)
+                    }
+
+                    VStack(alignment: .leading, spacing: 20) {
+                        radarMainColumn
+                        metricsResponsiveStack
+                    }
+                }
+            }
+            .screenPadding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .task {
+            if viewModel.state == .idle {
+                await viewModel.load(sessionStore: sessionStore)
+            }
+            viewModel.startPolling(sessionStore: sessionStore)
+        }
+        .onDisappear {
+            viewModel.stopPolling()
+        }
+    }
+
+    private var roomTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 11) {
                 if viewModel.rooms.isEmpty {
                     RoomTab(title: "Room 1", isSelected: true) {}
@@ -592,69 +771,108 @@ private struct LiveRadarView: View {
                     }
                 }
             }
+            .padding(.bottom, 1)
+        }
+    }
 
-            HStack(alignment: .top, spacing: 20) {
-                VStack(spacing: 20) {
-                    RadarMapCard(points: viewModel.radarPoints, state: viewModel.state)
-                        .frame(height: 340)
+    private var radarMainColumn: some View {
+        VStack(spacing: 20) {
+            RadarMapCard(points: viewModel.radarPoints, state: viewModel.state)
+                .frame(minHeight: 280, idealHeight: 340, maxHeight: 380)
 
-                    WhitePanel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack {
-                                Label("Current Occupants", systemImage: "person.2.fill")
-                                    .font(.system(size: 16, weight: .bold))
-                                Spacer()
-                                SearchField(text: $viewModel.occupantsSearchText, placeholder: "Search by Name...")
-                                    .frame(width: 210)
-                                Image(systemName: "line.3.horizontal.decrease")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(AegisColors.teal)
-                                    .frame(width: 30, height: 30)
-                                    .background(Circle().fill(Color.white))
-                            }
-                            OccupantsTable(rows: viewModel.filteredOccupants, state: viewModel.state)
-                        }
-                    }
-                    .frame(maxHeight: .infinity)
+            WhitePanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    occupantsHeader
+                    OccupantsTable(rows: viewModel.filteredOccupants, state: viewModel.state)
+                        .frame(minHeight: 150, maxHeight: 260)
                 }
-
-                VStack(spacing: 22) {
-                    MetricCard(
-                        icon: "thermometer.medium",
-                        iconColor: Color(red: 0.93, green: 0.42, blue: 0.49),
-                        iconBackground: Color(red: 1.0, green: 0.68, blue: 0.72),
-                        title: "Room Temperature",
-                        value: String(format: "%.1f\u{00B0}C", viewModel.metrics.temperature).replacingOccurrences(of: ".", with: ",")
-                    )
-                    MetricCard(
-                        icon: "humidity.fill",
-                        iconColor: Color(red: 0.17, green: 0.58, blue: 0.70),
-                        iconBackground: Color(red: 0.66, green: 0.88, blue: 0.93),
-                        title: "Humidity",
-                        value: "\(Int(viewModel.metrics.humidity.rounded()))%"
-                    )
-                    MetricCard(
-                        icon: "person.3.fill",
-                        iconColor: Color(red: 0.24, green: 0.60, blue: 0.22),
-                        iconBackground: Color(red: 0.69, green: 0.91, blue: 0.66),
-                        title: "People in Room",
-                        value: "\(viewModel.metrics.peopleInRoom)"
-                    )
-                    Spacer()
-                }
-                .frame(width: 240)
             }
         }
-        .screenPadding()
-        .task {
-            if viewModel.state == .idle {
-                await viewModel.load(sessionStore: sessionStore)
+    }
+
+    private var occupantsHeader: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                occupantsTitle
+                Spacer()
+                occupantsControls
             }
-            viewModel.startPolling(sessionStore: sessionStore)
+
+            VStack(alignment: .leading, spacing: 12) {
+                occupantsTitle
+                occupantsControls
+            }
         }
-        .onDisappear {
-            viewModel.stopPolling()
+    }
+
+    private var occupantsTitle: some View {
+        Label("Current Occupants", systemImage: "person.2.fill")
+            .font(.system(size: 16, weight: .bold))
+    }
+
+    private var occupantsControls: some View {
+        HStack(spacing: 12) {
+            SearchField(text: $viewModel.occupantsSearchText, placeholder: "Search by Name...")
+                .frame(width: 210)
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AegisColors.teal)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color.white))
         }
+    }
+
+    private var metricsColumn: some View {
+        VStack(spacing: 22) {
+            temperatureMetric
+            humidityMetric
+            peopleMetric
+        }
+    }
+
+    private var metricsResponsiveStack: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 16) {
+                temperatureMetric
+                humidityMetric
+                peopleMetric
+            }
+            VStack(spacing: 14) {
+                temperatureMetric
+                humidityMetric
+                peopleMetric
+            }
+        }
+    }
+
+    private var temperatureMetric: some View {
+        MetricCard(
+            icon: "thermometer.medium",
+            iconColor: Color(red: 0.93, green: 0.42, blue: 0.49),
+            iconBackground: Color(red: 1.0, green: 0.68, blue: 0.72),
+            title: "Room Temperature",
+            value: String(format: "%.1f\u{00B0}C", viewModel.metrics.temperature).replacingOccurrences(of: ".", with: ",")
+        )
+    }
+
+    private var humidityMetric: some View {
+        MetricCard(
+            icon: "humidity.fill",
+            iconColor: Color(red: 0.17, green: 0.58, blue: 0.70),
+            iconBackground: Color(red: 0.66, green: 0.88, blue: 0.93),
+            title: "Humidity",
+            value: "\(Int(viewModel.metrics.humidity.rounded()))%"
+        )
+    }
+
+    private var peopleMetric: some View {
+        MetricCard(
+            icon: "person.3.fill",
+            iconColor: Color(red: 0.24, green: 0.60, blue: 0.22),
+            iconBackground: Color(red: 0.69, green: 0.91, blue: 0.66),
+            title: "People in Room",
+            value: "\(viewModel.metrics.peopleInRoom)"
+        )
     }
 }
 
@@ -799,29 +1017,32 @@ private struct OccupantsTable: View {
             } else if rows.isEmpty {
                 TableMessage("No current occupants.")
             } else {
-                ForEach(rows) { row in
-                    HStack(spacing: 0) {
-                        Text(row.learner).tableCell(maxWidth: .infinity, alignment: .leading)
-                        Text(row.session).tableCell(width: 100)
-                        Text(row.formattedDuration).tableCell(width: 130)
-                        Text(row.status.titleCasedStatus)
-                            .foregroundStyle(statusColor(row.status))
-                            .tableCell(width: 110)
-                        Text("Now").tableCell(width: 110)
-                    }
-                    .frame(height: 46)
-                    .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(rows) { row in
+                            HStack(spacing: 0) {
+                                Text(row.learner).tableCell(maxWidth: .infinity, alignment: .leading)
+                                Text(row.session).tableCell(width: 100)
+                                Text(row.formattedDuration).tableCell(width: 130)
+                                Text(row.status.titleCasedStatus)
+                                    .foregroundStyle(statusColor(row.status))
+                                    .tableCell(width: 110)
+                                Text("Now").tableCell(width: 110)
+                            }
+                            .frame(height: 46)
+                            .overlay(alignment: .bottom) {
+                                Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                            }
+                        }
                     }
                 }
+                .frame(minHeight: 120, maxHeight: .infinity)
             }
 
             if case let .failed(message) = state {
                 ErrorBanner(message: message)
                     .padding(.top, 12)
             }
-
-            Spacer(minLength: 0)
         }
     }
 }
@@ -831,93 +1052,128 @@ private struct SettingsView: View {
     @ObservedObject var sessionStore: SessionStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 34) {
-            Text("Settings")
-                .screenTitle()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 34) {
+                Text("Settings")
+                    .screenTitle()
 
-            WhitePanel {
-                VStack(alignment: .leading, spacing: 24) {
-                    Label("Attendance Setting", systemImage: "gearshape.fill")
-                        .font(.system(size: 16, weight: .bold))
+                WhitePanel {
+                    VStack(alignment: .leading, spacing: 24) {
+                        Label("Attendance Setting", systemImage: "gearshape.fill")
+                            .font(.system(size: 16, weight: .bold))
 
-                    SettingsSubpanel(title: "Session Thresholds", icon: "clock") {
-                        VStack(spacing: 18) {
-                            SessionThresholdRow(title: "AM Session", config: $viewModel.sessionConfigs.am)
-                            SessionThresholdRow(title: "PM Session", config: $viewModel.sessionConfigs.pm)
-                        }
-                    }
-
-                    SettingsSubpanel(title: "Late Check-in", icon: "clock.badge.exclamationmark") {
-                        HStack(spacing: 12) {
-                            TimeField(text: $viewModel.sessionConfigs.am.lateAfter)
-                            Text("AM tolerance")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(AegisColors.mutedText)
-                            TimeField(text: $viewModel.sessionConfigs.pm.lateAfter)
-                            Text("PM tolerance")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(AegisColors.mutedText)
-                            Spacer()
-                        }
-                        Text("Check-ins after the late threshold are marked late by the backend.")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AegisColors.mutedText)
-                    }
-
-                    Label("User Presence Update Interval", systemImage: "clock.arrow.circlepath")
-                        .font(.system(size: 16, weight: .bold))
-                        .padding(.top, 4)
-
-                    SettingsSubpanel(title: "Adjust Interval", icon: "arrow.clockwise") {
-                        HStack {
-                            Stepper(value: $viewModel.systemConfig.presenceStalenessMinutes, in: 1...60) {
-                                Text("\(viewModel.systemConfig.presenceStalenessMinutes) minutes")
-                                    .font(.system(size: 13, weight: .semibold))
+                        SettingsSubpanel(title: "Session Thresholds", icon: "clock") {
+                            VStack(spacing: 18) {
+                                SessionThresholdRow(title: "AM Session", config: $viewModel.sessionConfigs.am)
+                                SessionThresholdRow(title: "PM Session", config: $viewModel.sessionConfigs.pm)
                             }
-                            .frame(width: 220)
-                            Spacer()
-                            TextField("Timezone", text: $viewModel.systemConfig.timezone)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 180)
                         }
-                        Text("Set how long a presence ping stays active before the user is considered stale.")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AegisColors.mutedText)
-                    }
 
-                    HStack {
-                        if let message = viewModel.saveMessage {
-                            Text(message)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(message == "Settings saved" ? AegisColors.activeGreen : Color.red)
+                        SettingsSubpanel(title: "Late Check-in", icon: "clock.badge.exclamationmark") {
+                            ViewThatFits(in: .horizontal) {
+                                HStack(spacing: 12) {
+                                    TimeField(text: $viewModel.sessionConfigs.am.lateAfter)
+                                    Text("AM tolerance")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(AegisColors.mutedText)
+                                    TimeField(text: $viewModel.sessionConfigs.pm.lateAfter)
+                                    Text("PM tolerance")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(AegisColors.mutedText)
+                                    Spacer()
+                                }
+
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack(spacing: 12) {
+                                        TimeField(text: $viewModel.sessionConfigs.am.lateAfter)
+                                        Text("AM tolerance")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(AegisColors.mutedText)
+                                    }
+                                    HStack(spacing: 12) {
+                                        TimeField(text: $viewModel.sessionConfigs.pm.lateAfter)
+                                        Text("PM tolerance")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(AegisColors.mutedText)
+                                    }
+                                }
+                            }
+                            Text("Check-ins after the late threshold are marked late by the backend.")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AegisColors.mutedText)
                         }
-                        Spacer()
-                        Button {
-                            Task { await viewModel.save(sessionStore: sessionStore) }
-                        } label: {
-                            Text(viewModel.isSaving ? "Saving..." : "Save Settings")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 18)
-                                .frame(height: 34)
-                                .background(AegisColors.teal)
-                                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+
+                        Label("User Presence Update Interval", systemImage: "clock.arrow.circlepath")
+                            .font(.system(size: 16, weight: .bold))
+                            .padding(.top, 4)
+
+                        SettingsSubpanel(title: "Adjust Interval", icon: "arrow.clockwise") {
+                            ViewThatFits(in: .horizontal) {
+                                HStack {
+                                    presenceStepper
+                                    Spacer()
+                                    timezoneField
+                                }
+
+                                VStack(alignment: .leading, spacing: 12) {
+                                    presenceStepper
+                                    timezoneField
+                                }
+                            }
+                            Text("Set how long a presence ping stays active before the user is considered stale.")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AegisColors.mutedText)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(viewModel.isSaving)
+
+                        HStack {
+                            if let message = viewModel.saveMessage {
+                                Text(message)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(message == "Settings saved" ? AegisColors.activeGreen : Color.red)
+                            }
+                            Spacer()
+                            Button {
+                                Task { await viewModel.save(sessionStore: sessionStore) }
+                            } label: {
+                                Text(viewModel.isSaving ? "Saving..." : "Save Settings")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 18)
+                                    .frame(height: 34)
+                                    .background(AegisColors.teal)
+                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(viewModel.isSaving)
+                        }
                     }
                 }
-            }
-            .frame(maxWidth: 860)
+                .frame(maxWidth: 860, alignment: .leading)
 
-            Spacer()
+                Spacer(minLength: 0)
+            }
+            .screenPadding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .screenPadding()
         .task {
             if viewModel.state == .idle {
                 await viewModel.load(sessionStore: sessionStore)
             }
         }
+    }
+
+    private var presenceStepper: some View {
+        Stepper(value: $viewModel.systemConfig.presenceStalenessMinutes, in: 1...60) {
+            Text("\(viewModel.systemConfig.presenceStalenessMinutes) minutes")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .frame(width: 220)
+    }
+
+    private var timezoneField: some View {
+        TextField("Timezone", text: $viewModel.systemConfig.timezone)
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 180)
     }
 }
 
@@ -949,19 +1205,38 @@ private struct SessionThresholdRow: View {
     @Binding var config: SessionConfig
 
     var body: some View {
-        HStack(spacing: 16) {
-            Text(title)
-                .font(.system(size: 13, weight: .bold))
-                .frame(width: 110, alignment: .leading)
-            TimeField(text: $config.startTime)
-            SessionPill(text: title.hasPrefix("AM") ? "AM" : "PM")
-            Text("to")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AegisColors.mutedText)
-            TimeField(text: $config.endTime)
-            SessionPill(text: title.hasPrefix("AM") ? "AM" : "PM")
-            Spacer()
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 16) {
+                rowTitle
+                TimeField(text: $config.startTime)
+                SessionPill(text: title.hasPrefix("AM") ? "AM" : "PM")
+                Text("to")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AegisColors.mutedText)
+                TimeField(text: $config.endTime)
+                SessionPill(text: title.hasPrefix("AM") ? "AM" : "PM")
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                rowTitle
+                HStack(spacing: 12) {
+                    TimeField(text: $config.startTime)
+                    SessionPill(text: title.hasPrefix("AM") ? "AM" : "PM")
+                    Text("to")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AegisColors.mutedText)
+                    TimeField(text: $config.endTime)
+                    SessionPill(text: title.hasPrefix("AM") ? "AM" : "PM")
+                }
+            }
         }
+    }
+
+    private var rowTitle: some View {
+        Text(title)
+            .font(.system(size: 13, weight: .bold))
+            .frame(width: 110, alignment: .leading)
     }
 }
 
@@ -992,37 +1267,7 @@ private struct SessionPill: View {
     }
 }
 
-private struct ComingSoonView: View {
-    let title: String
-    let icon: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 34) {
-            Text(title)
-                .screenTitle()
-
-            WhitePanel {
-                VStack(spacing: 16) {
-                    Image(systemName: icon)
-                        .font(.system(size: 38, weight: .semibold))
-                        .foregroundStyle(AegisColors.teal)
-                    Text("\(title) is coming soon")
-                        .font(.system(size: 18, weight: .bold))
-                    Text("This UI is reserved for a later backend-supported release.")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AegisColors.mutedText)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .frame(maxWidth: 620, maxHeight: 260)
-
-            Spacer()
-        }
-        .screenPadding()
-    }
-}
-
-private struct WhitePanel<Content: View>: View {
+struct WhitePanel<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -1056,7 +1301,7 @@ private struct DateChip: View {
     }
 }
 
-private struct SearchField: View {
+struct SearchField: View {
     @Binding var text: String
     let placeholder: String
 
@@ -1144,7 +1389,7 @@ private struct LegendItem: View {
     }
 }
 
-private struct TableHeader: View {
+struct TableHeader: View {
     let columns: [(String, CGFloat)]
 
     var body: some View {
@@ -1166,7 +1411,7 @@ private struct TableHeader: View {
     }
 }
 
-private struct TableMessage: View {
+struct TableMessage: View {
     let message: String
 
     init(_ message: String) {
@@ -1181,7 +1426,7 @@ private struct TableMessage: View {
     }
 }
 
-private struct ErrorBanner: View {
+struct ErrorBanner: View {
     let message: String
 
     var body: some View {
@@ -1196,7 +1441,7 @@ private struct ErrorBanner: View {
     }
 }
 
-private extension View {
+extension View {
     func screenTitle() -> some View {
         self
             .font(.system(size: 27, weight: .bold))
@@ -1224,7 +1469,7 @@ private extension View {
     }
 }
 
-private func statusColor(_ status: String) -> Color {
+func statusColor(_ status: String) -> Color {
     let lowered = status.lowercased()
     if lowered.contains("active") || lowered.contains("on time") || lowered.contains("checked in") || lowered.contains("early") {
         return AegisColors.activeGreen

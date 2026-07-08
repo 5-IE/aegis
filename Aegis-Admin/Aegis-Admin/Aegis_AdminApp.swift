@@ -12,9 +12,9 @@ struct Aegis_AdminApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .frame(minWidth: 1120, minHeight: 760)
+                .frame(minWidth: 900, minHeight: 620)
         }
-        .defaultSize(width: 1342, height: 856)
+        .defaultSize(width: 1180, height: 760)
         .windowStyle(.hiddenTitleBar)
     }
 }

@@ -173,6 +173,24 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    func createRoom(_ form: AdminRoomForm) async throws -> Room {
+        try await authorized { token in
+            try await api.createRoom(form, accessToken: token)
+        }
+    }
+
+    func updateRoom(id: Int, form: AdminRoomForm) async throws -> Room {
+        try await authorized { token in
+            try await api.updateRoom(id: id, form: form, accessToken: token)
+        }
+    }
+
+    func deleteRoom(id: Int) async throws {
+        try await authorized { token in
+            try await api.deleteRoom(id: id, accessToken: token)
+        }
+    }
+
     func roomMap(roomID: Int) async throws -> [RadarPoint] {
         try await authorized { token in
             try await api.getRoomMap(roomID: roomID, accessToken: token)
@@ -212,6 +230,98 @@ final class SessionStore: ObservableObject {
     func updateSystemConfig(_ config: SystemConfig) async throws {
         try await authorized { token in
             try await api.updateSystemConfig(config, accessToken: token)
+        }
+    }
+
+    func adminUsers(
+        search: String,
+        roleFilter: AdminUserRoleFilter,
+        sessionFilter: SessionFilter,
+        includeInactive: Bool,
+        page: Int,
+        perPage: Int
+    ) async throws -> AdminUsersPage {
+        try await authorized { token in
+            try await api.getAdminUsers(
+                accessToken: token,
+                search: search,
+                roleFilter: roleFilter,
+                sessionFilter: sessionFilter,
+                includeInactive: includeInactive,
+                page: page,
+                perPage: perPage
+            )
+        }
+    }
+
+    func createAdminUser(_ form: AdminUserForm) async throws -> AdminUser {
+        try await authorized { token in
+            try await api.createAdminUser(form, accessToken: token)
+        }
+    }
+
+    func updateAdminUser(id: Int, form: AdminUserForm) async throws -> AdminUser {
+        try await authorized { token in
+            try await api.updateAdminUser(id: id, form: form, accessToken: token)
+        }
+    }
+
+    func resetAdminUserPassword(id: Int, newPassword: String) async throws {
+        try await authorized { token in
+            try await api.resetAdminUserPassword(id: id, newPassword: newPassword, accessToken: token)
+        }
+    }
+
+    func deleteAdminUser(id: Int) async throws {
+        try await authorized { token in
+            try await api.deleteAdminUser(id: id, accessToken: token)
+        }
+    }
+
+    func reactivateAdminUser(id: Int) async throws {
+        try await authorized { token in
+            try await api.reactivateAdminUser(id: id, accessToken: token)
+        }
+    }
+
+    func adminBeacons(
+        assignmentFilter: BeaconAssignmentFilter,
+        roomID: Int?,
+        page: Int,
+        perPage: Int
+    ) async throws -> AdminBeaconsPage {
+        try await authorized { token in
+            try await api.getAdminBeacons(
+                accessToken: token,
+                assignmentFilter: assignmentFilter,
+                roomID: roomID,
+                page: page,
+                perPage: perPage
+            )
+        }
+    }
+
+    func createAdminBeacon(_ form: AdminBeaconForm) async throws -> AdminBeacon {
+        try await authorized { token in
+            try await api.createAdminBeacon(form, accessToken: token)
+        }
+    }
+
+    func updateAdminBeacon(id: Int, form: AdminBeaconForm) async throws -> AdminBeacon {
+        try await authorized { token in
+            try await api.updateAdminBeacon(id: id, form: form, accessToken: token)
+        }
+    }
+
+    func deleteAdminBeacon(id: Int) async throws {
+        try await authorized { token in
+            try await api.deleteAdminBeacon(id: id, accessToken: token)
+        }
+    }
+
+    func runRollup(date: String?, userID: Int?) async throws -> RollupResult {
+        try await authorized { token in
+            try await api.runRollup(date: date, userID: userID, accessToken: token)
         }
     }
 

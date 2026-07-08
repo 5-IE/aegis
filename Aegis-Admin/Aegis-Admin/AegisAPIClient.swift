@@ -103,6 +103,36 @@ struct BackendErrorResponse: Decodable {
     let message: String
 }
 
+struct FlexibleBool: Decodable {
+    let value: Bool
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let bool = try? container.decode(Bool.self) {
+            self.value = bool
+        } else if let int = try? container.decode(Int.self) {
+            self.value = int != 0
+        } else if let string = try? container.decode(String.self) {
+            let normalized = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if ["true", "1", "yes"].contains(normalized) {
+                self.value = true
+            } else if ["false", "0", "no"].contains(normalized) {
+                self.value = false
+            } else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Expected boolean-like value but found \(string)."
+                )
+            }
+        } else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Expected Bool, Int, or String boolean value."
+            )
+        }
+    }
+}
+
 struct AbsenceSummaryResponse: Decodable {
     let presentSummary: PresentSummary
     let absentSummary: AbsentSummary
@@ -193,6 +223,10 @@ struct RoomItem: Decodable {
     var model: Room {
         Room(id: id, name: name)
     }
+}
+
+struct RoomMutationRequest: Encodable {
+    let name: String
 }
 
 struct RoomMapResponse: Decodable {
@@ -332,13 +366,214 @@ struct SystemConfigUpdateRequest: Encodable {
     }
 }
 
+struct AdminUsersResponse: Decodable {
+    let list: [AdminUserPayload]
+    let total: Int
+    let page: Int
+    let perPage: Int
+
+    enum CodingKeys: String, CodingKey {
+        case list
+        case total
+        case page
+        case perPage = "per_page"
+    }
+
+    var model: AdminUsersPage {
+        AdminUsersPage(
+            users: list.map(\.model),
+            total: total,
+            page: page,
+            perPage: perPage
+        )
+    }
+}
+
+struct AdminBeaconsResponse: Decodable {
+    let list: [AdminBeaconPayload]
+    let total: Int
+    let page: Int
+    let perPage: Int
+
+    enum CodingKeys: String, CodingKey {
+        case list
+        case total
+        case page
+        case perPage = "per_page"
+    }
+
+    var model: AdminBeaconsPage {
+        AdminBeaconsPage(
+            beacons: list.map(\.model),
+            total: total,
+            page: page,
+            perPage: perPage
+        )
+    }
+}
+
+struct AdminBeaconPayload: Decodable {
+    let id: Int
+    let name: String
+    let beaconIdentifier: String
+    let roomID: Int?
+    let roomName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case beaconIdentifier = "beacon_identifier"
+        case roomID = "room_id"
+        case roomName = "room_name"
+    }
+
+    var model: AdminBeacon {
+        AdminBeacon(
+            id: id,
+            name: name,
+            beaconIdentifier: beaconIdentifier,
+            roomID: roomID,
+            roomName: roomName
+        )
+    }
+}
+
+struct AdminBeaconMutationRequest: Encodable {
+    let name: String
+    let beaconIdentifier: String
+    let roomID: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case beaconIdentifier = "beacon_identifier"
+        case roomID = "room_id"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(beaconIdentifier, forKey: .beaconIdentifier)
+        if let roomID {
+            try container.encode(roomID, forKey: .roomID)
+        } else {
+            try container.encodeNil(forKey: .roomID)
+        }
+    }
+}
+
+struct AdminUserPayload: Decodable {
+    let id: Int
+    let username: String
+    let email: String
+    let role: String
+    let session: String?
+    let firstName: String?
+    let lastName: String?
+    let isActive: FlexibleBool
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case username
+        case email
+        case role
+        case session
+        case firstName = "first_name"
+        case lastName = "last_name"
+        case isActive = "is_active"
+        case createdAt = "created_at"
+    }
+
+    var model: AdminUser {
+        AdminUser(
+            id: id,
+            username: username,
+            email: email,
+            role: AdminUserRole(rawValue: role) ?? .learner,
+            session: session,
+            firstName: firstName,
+            lastName: lastName,
+            isActive: isActive.value,
+            createdAt: createdAt
+        )
+    }
+}
+
+struct AdminUserCreateRequest: Encodable {
+    let username: String
+    let password: String
+    let email: String
+    let role: String
+    let session: String?
+    let firstName: String?
+    let lastName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case username
+        case password
+        case email
+        case role
+        case session
+        case firstName = "first_name"
+        case lastName = "last_name"
+    }
+}
+
+struct AdminUserUpdateRequest: Encodable {
+    let email: String
+    let role: String
+    let session: String?
+    let firstName: String?
+    let lastName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case email
+        case role
+        case session
+        case firstName = "first_name"
+        case lastName = "last_name"
+    }
+}
+
+struct AdminPasswordResetRequest: Encodable {
+    let newPassword: String
+
+    enum CodingKeys: String, CodingKey {
+        case newPassword = "new_password"
+    }
+}
+
+struct RollupRequest: Encodable {
+    let date: String?
+    let userID: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case userID = "user_id"
+    }
+}
+
+struct RollupResponse: Decodable {
+    let processed: Int
+    let skippedLeave: Int
+
+    enum CodingKeys: String, CodingKey {
+        case processed
+        case skippedLeave = "skipped_leave"
+    }
+
+    var model: RollupResult {
+        RollupResult(processed: processed, skippedLeave: skippedLeave)
+    }
+}
+
 final class AegisAPIClient {
     let baseURL: URL
     private let session: URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(baseURL: URL = URL(string: "http://localhost:3000")!, session: URLSession = .shared) {
+    init(baseURL: URL = URL(string: "http://127.0.0.1:3001")!, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
     }
@@ -388,6 +623,36 @@ final class AegisAPIClient {
         return response.list.map(\.model)
     }
 
+    func createRoom(_ form: AdminRoomForm, accessToken: String) async throws -> Room {
+        let request = RoomMutationRequest(name: form.name.trimmingCharacters(in: .whitespacesAndNewlines))
+        let response: RoomItem = try await send(
+            path: "/api/v1/admin/rooms",
+            method: "POST",
+            body: request,
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func updateRoom(id: Int, form: AdminRoomForm, accessToken: String) async throws -> Room {
+        let request = RoomMutationRequest(name: form.name.trimmingCharacters(in: .whitespacesAndNewlines))
+        let response: RoomItem = try await send(
+            path: "/api/v1/admin/rooms/\(id)",
+            method: "PATCH",
+            body: request,
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func deleteRoom(id: Int, accessToken: String) async throws {
+        let _: NoContent = try await send(
+            path: "/api/v1/admin/rooms/\(id)",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
     func getRoomMap(roomID: Int, accessToken: String) async throws -> [RadarPoint] {
         let response: RoomMapResponse = try await send(path: "/api/v1/admin/rooms/\(roomID)/map", accessToken: accessToken)
         return response.list.compactMap(\.model)
@@ -434,6 +699,172 @@ final class AegisAPIClient {
         )
     }
 
+    func getAdminUsers(
+        accessToken: String,
+        search: String,
+        roleFilter: AdminUserRoleFilter,
+        sessionFilter: SessionFilter,
+        includeInactive: Bool,
+        page: Int,
+        perPage: Int
+    ) async throws -> AdminUsersPage {
+        var query: [URLQueryItem] = [
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "per_page", value: "\(perPage)"),
+            URLQueryItem(name: "include_inactive", value: includeInactive ? "true" : "false")
+        ]
+        let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            query.append(URLQueryItem(name: "name", value: trimmed))
+        }
+        if let role = roleFilter.queryValue {
+            query.append(URLQueryItem(name: "role", value: role))
+        }
+        if let session = sessionFilter.queryValue {
+            query.append(URLQueryItem(name: "session", value: session))
+        }
+        let response: AdminUsersResponse = try await send(
+            path: "/api/v1/admin/users",
+            queryItems: query,
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func createAdminUser(_ form: AdminUserForm, accessToken: String) async throws -> AdminUser {
+        let request = AdminUserCreateRequest(
+            username: form.username.trimmingCharacters(in: .whitespacesAndNewlines),
+            password: form.password,
+            email: form.email.trimmingCharacters(in: .whitespacesAndNewlines),
+            role: form.role.rawValue,
+            session: form.role == .learner ? form.session : nil,
+            firstName: cleanOptional(form.firstName),
+            lastName: cleanOptional(form.lastName)
+        )
+        let response: AdminUserPayload = try await send(
+            path: "/api/v1/admin/users",
+            method: "POST",
+            body: request,
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func updateAdminUser(id: Int, form: AdminUserForm, accessToken: String) async throws -> AdminUser {
+        let request = AdminUserUpdateRequest(
+            email: form.email.trimmingCharacters(in: .whitespacesAndNewlines),
+            role: form.role.rawValue,
+            session: form.role == .learner ? form.session : nil,
+            firstName: cleanOptional(form.firstName),
+            lastName: cleanOptional(form.lastName)
+        )
+        let response: AdminUserPayload = try await send(
+            path: "/api/v1/admin/users/\(id)",
+            method: "PATCH",
+            body: request,
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func resetAdminUserPassword(id: Int, newPassword: String, accessToken: String) async throws {
+        let _: NoContent = try await send(
+            path: "/api/v1/admin/users/\(id)/password",
+            method: "PUT",
+            body: AdminPasswordResetRequest(newPassword: newPassword),
+            accessToken: accessToken
+        )
+    }
+
+    func deleteAdminUser(id: Int, accessToken: String) async throws {
+        let _: NoContent = try await send(
+            path: "/api/v1/admin/users/\(id)",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
+    func reactivateAdminUser(id: Int, accessToken: String) async throws {
+        let _: NoContent = try await send(
+            path: "/api/v1/admin/users/\(id)/reactivate",
+            method: "POST",
+            accessToken: accessToken
+        )
+    }
+
+    func getAdminBeacons(
+        accessToken: String,
+        assignmentFilter: BeaconAssignmentFilter,
+        roomID: Int?,
+        page: Int,
+        perPage: Int
+    ) async throws -> AdminBeaconsPage {
+        var query: [URLQueryItem] = [
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "per_page", value: "\(perPage)")
+        ]
+        if let assigned = assignmentFilter.queryValue {
+            query.append(URLQueryItem(name: "assigned", value: assigned ? "true" : "false"))
+        }
+        if let roomID {
+            query.append(URLQueryItem(name: "room_id", value: "\(roomID)"))
+        }
+        let response: AdminBeaconsResponse = try await send(
+            path: "/api/v1/admin/beacons",
+            queryItems: query,
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func createAdminBeacon(_ form: AdminBeaconForm, accessToken: String) async throws -> AdminBeacon {
+        let request = AdminBeaconMutationRequest(
+            name: form.name.trimmingCharacters(in: .whitespacesAndNewlines),
+            beaconIdentifier: form.beaconIdentifier.trimmingCharacters(in: .whitespacesAndNewlines),
+            roomID: form.roomID
+        )
+        let response: AdminBeaconPayload = try await send(
+            path: "/api/v1/admin/beacons",
+            method: "POST",
+            body: request,
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func updateAdminBeacon(id: Int, form: AdminBeaconForm, accessToken: String) async throws -> AdminBeacon {
+        let request = AdminBeaconMutationRequest(
+            name: form.name.trimmingCharacters(in: .whitespacesAndNewlines),
+            beaconIdentifier: form.beaconIdentifier.trimmingCharacters(in: .whitespacesAndNewlines),
+            roomID: form.roomID
+        )
+        let response: AdminBeaconPayload = try await send(
+            path: "/api/v1/admin/beacons/\(id)",
+            method: "PATCH",
+            body: request,
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func deleteAdminBeacon(id: Int, accessToken: String) async throws {
+        let _: NoContent = try await send(
+            path: "/api/v1/admin/beacons/\(id)",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
+    func runRollup(date: String?, userID: Int?, accessToken: String) async throws -> RollupResult {
+        let response: RollupResponse = try await send(
+            path: "/api/v1/admin/rollup",
+            method: "POST",
+            body: RollupRequest(date: date, userID: userID),
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
     private func send<Response: Decodable, Body: Encodable>(
         path: String,
         method: String = "GET",
@@ -448,7 +879,7 @@ final class AegisAPIClient {
         } catch let error as AegisAPIError {
             throw error
         } catch let error as DecodingError {
-            throw AegisAPIError.decoding(error.localizedDescription)
+            throw AegisAPIError.decoding(Self.describe(error))
         } catch {
             throw AegisAPIError.network(error.localizedDescription)
         }
@@ -514,6 +945,31 @@ final class AegisAPIClient {
             throw AegisAPIError.backend(code: "http_\(http.statusCode)", message: "Request failed with status \(http.statusCode).", statusCode: http.statusCode)
         }
         return try decoder.decode(Response.self, from: data)
+    }
+
+    private func cleanOptional(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func describe(_ error: DecodingError) -> String {
+        switch error {
+        case let .keyNotFound(key, context):
+            return "Missing field '\(key.stringValue)' at \(codingPath(context.codingPath))."
+        case let .typeMismatch(type, context):
+            return "Field \(codingPath(context.codingPath)) has the wrong type. Expected \(type)."
+        case let .valueNotFound(type, context):
+            return "Field \(codingPath(context.codingPath)) was empty. Expected \(type)."
+        case let .dataCorrupted(context):
+            return "Invalid value at \(codingPath(context.codingPath)): \(context.debugDescription)"
+        @unknown default:
+            return error.localizedDescription
+        }
+    }
+
+    private static func codingPath(_ path: [CodingKey]) -> String {
+        guard !path.isEmpty else { return "response root" }
+        return path.map(\.stringValue).joined(separator: ".")
     }
 }
 

@@ -23,6 +23,7 @@ enum AdminSection: String, CaseIterable, Identifiable {
             return "gearshape"
         }
     }
+
 }
 
 enum LoadState: Equatable {
@@ -72,6 +73,25 @@ struct AttendanceOverviewRow: Identifiable, Equatable {
 struct Room: Identifiable, Equatable {
     let id: Int
     let name: String
+}
+
+enum AdministrationMode: String, CaseIterable, Identifiable {
+    case users = "User Management"
+    case rooms = "Room Management"
+    case beacons = "Beacon Management"
+
+    var id: String { rawValue }
+
+    var symbolName: String {
+        switch self {
+        case .users:
+            return "person.3.fill"
+        case .rooms:
+            return "building.2.fill"
+        case .beacons:
+            return "sensor.tag.radiowaves.forward.fill"
+        }
+    }
 }
 
 struct RadarPoint: Identifiable, Equatable {
@@ -137,6 +157,211 @@ enum SessionFilter: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
     var queryValue: String? { self == .all ? nil : rawValue }
+}
+
+enum AdminUserRole: String, CaseIterable, Identifiable {
+    case learner
+    case admin
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .learner:
+            return "Learner"
+        case .admin:
+            return "Admin"
+        }
+    }
+}
+
+enum AdminUserRoleFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case learner = "Learner"
+    case admin = "Admin"
+
+    var id: String { rawValue }
+
+    var queryValue: String? {
+        switch self {
+        case .all:
+            return nil
+        case .learner:
+            return AdminUserRole.learner.rawValue
+        case .admin:
+            return AdminUserRole.admin.rawValue
+        }
+    }
+}
+
+struct AdminUser: Identifiable, Equatable {
+    let id: Int
+    let username: String
+    let email: String
+    let role: AdminUserRole
+    let session: String?
+    let firstName: String?
+    let lastName: String?
+    let isActive: Bool
+    let createdAt: String?
+
+    var displayName: String {
+        let joined = [firstName, lastName]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return joined.isEmpty ? username : joined
+    }
+
+    var sessionDisplay: String {
+        role == .learner ? (session ?? "-") : "-"
+    }
+
+    var statusText: String {
+        isActive ? "Active" : "Inactive"
+    }
+}
+
+struct AdminUsersPage: Equatable {
+    let users: [AdminUser]
+    let total: Int
+    let page: Int
+    let perPage: Int
+}
+
+struct AdminRoomForm: Identifiable, Equatable {
+    let formID = UUID()
+    var roomID: Int?
+    var name = ""
+
+    var id: UUID { formID }
+    var isEditing: Bool { roomID != nil }
+    var title: String { isEditing ? "Edit Room" : "Add New Room" }
+    var submitTitle: String { isEditing ? "Save Room" : "Create Room" }
+    var canSubmit: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    init() {}
+
+    init(room: Room) {
+        self.roomID = room.id
+        self.name = room.name
+    }
+}
+
+enum BeaconAssignmentFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case assigned = "Assigned"
+    case unassigned = "Unassigned"
+
+    var id: String { rawValue }
+
+    var queryValue: Bool? {
+        switch self {
+        case .all:
+            return nil
+        case .assigned:
+            return true
+        case .unassigned:
+            return false
+        }
+    }
+}
+
+struct AdminBeacon: Identifiable, Equatable {
+    let id: Int
+    let name: String
+    let beaconIdentifier: String
+    let roomID: Int?
+    let roomName: String?
+
+    var assignmentText: String {
+        roomName ?? "Unassigned"
+    }
+
+    var statusText: String {
+        roomID == nil ? "Unassigned" : "Assigned"
+    }
+}
+
+struct AdminBeaconsPage: Equatable {
+    let beacons: [AdminBeacon]
+    let total: Int
+    let page: Int
+    let perPage: Int
+}
+
+struct AdminBeaconForm: Identifiable, Equatable {
+    let formID = UUID()
+    var beaconID: Int?
+    var name = ""
+    var beaconIdentifier = ""
+    var roomID: Int?
+
+    var id: UUID { formID }
+    var isEditing: Bool { beaconID != nil }
+    var title: String { isEditing ? "Edit Beacon" : "Register New Beacon" }
+    var submitTitle: String { isEditing ? "Save Beacon" : "Register Beacon" }
+
+    var canSubmit: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !beaconIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    init() {}
+
+    init(beacon: AdminBeacon) {
+        self.beaconID = beacon.id
+        self.name = beacon.name
+        self.beaconIdentifier = beacon.beaconIdentifier
+        self.roomID = beacon.roomID
+    }
+}
+
+struct AdminUserForm: Identifiable, Equatable {
+    let formID = UUID()
+    var userID: Int?
+    var username = ""
+    var password = ""
+    var email = ""
+    var role: AdminUserRole = .learner
+    var session = "AM"
+    var firstName = ""
+    var lastName = ""
+
+    var id: UUID { formID }
+    var isEditing: Bool { userID != nil }
+
+    var title: String {
+        isEditing ? "Edit User" : "Add New User"
+    }
+
+    var submitTitle: String {
+        isEditing ? "Save User" : "Create User"
+    }
+
+    var canSubmit: Bool {
+        !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        (isEditing || !password.isEmpty) &&
+        (role == .admin || !session.isEmpty)
+    }
+
+    init() {}
+
+    init(user: AdminUser) {
+        self.userID = user.id
+        self.username = user.username
+        self.email = user.email
+        self.role = user.role
+        self.session = user.session ?? "AM"
+        self.firstName = user.firstName ?? ""
+        self.lastName = user.lastName ?? ""
+    }
+}
+
+struct RollupResult: Equatable {
+    let processed: Int
+    let skippedLeave: Int
 }
 
 extension String {
