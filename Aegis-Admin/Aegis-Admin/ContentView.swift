@@ -510,6 +510,18 @@ private struct DashboardView: View {
                 attendancePanelHeader
                 AttendanceTable(rows: viewModel.overviewRows, state: viewModel.state)
                     .frame(minHeight: 180, maxHeight: .infinity)
+                AdminPaginationFooter(
+                    summary: viewModel.pageSummary,
+                    outcome: nil,
+                    canGoPrevious: viewModel.canGoPrevious,
+                    canGoNext: viewModel.canGoNext,
+                    previous: {
+                        Task { await viewModel.previousPage(sessionStore: sessionStore) }
+                    },
+                    next: {
+                        Task { await viewModel.nextPage(sessionStore: sessionStore) }
+                    }
+                )
             }
             .frame(maxHeight: .infinity)
         }
@@ -546,7 +558,14 @@ private struct DashboardView: View {
             SearchField(text: $viewModel.searchText, placeholder: "Search by Name...")
                 .frame(width: 210)
                 .onSubmit {
-                    Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
+                    Task { await viewModel.applyFilters(sessionStore: sessionStore) }
+                }
+                .onChange(of: viewModel.searchText) { oldValue, newValue in
+                    // Clearing the field reloads immediately; typed queries
+                    // still apply via Return (onSubmit).
+                    if !oldValue.isEmpty, newValue.isEmpty {
+                        Task { await viewModel.applyFilters(sessionStore: sessionStore) }
+                    }
                 }
 
             Menu {
@@ -554,9 +573,6 @@ private struct DashboardView: View {
                     ForEach(SessionFilter.allCases) { filter in
                         Text(filter.rawValue).tag(filter)
                     }
-                }
-                Button("Apply") {
-                    Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
                 }
             } label: {
                 Image(systemName: "line.3.horizontal.decrease")
@@ -566,6 +582,9 @@ private struct DashboardView: View {
                     .background(Circle().fill(Color.white))
             }
             .menuStyle(.borderlessButton)
+            .onChange(of: viewModel.sessionFilter) { _, _ in
+                Task { await viewModel.applyFilters(sessionStore: sessionStore) }
+            }
         }
     }
 }
@@ -835,7 +854,8 @@ private struct LiveRadarView: View {
             iconColor: Color(red: 0.93, green: 0.42, blue: 0.49),
             iconBackground: Color(red: 1.0, green: 0.68, blue: 0.72),
             title: "Room Temperature",
-            value: String(format: "%.1f\u{00B0}C", viewModel.metrics.temperature).replacingOccurrences(of: ".", with: ",")
+            value: String(format: "%.1f\u{00B0}C", viewModel.metrics.temperature).replacingOccurrences(of: ".", with: ","),
+            caption: "Sample data"
         )
     }
 
@@ -845,7 +865,8 @@ private struct LiveRadarView: View {
             iconColor: Color(red: 0.17, green: 0.58, blue: 0.70),
             iconBackground: Color(red: 0.66, green: 0.88, blue: 0.93),
             title: "Humidity",
-            value: "\(Int(viewModel.metrics.humidity.rounded()))%"
+            value: "\(Int(viewModel.metrics.humidity.rounded()))%",
+            caption: "Sample data"
         )
     }
 
@@ -955,10 +976,12 @@ private struct RadarPlot: View {
 }
 
 private struct BeaconMarkerData: Identifiable {
-    let id = UUID()
     let label: String
     let x: Double
     let y: Double
+
+    /// Stable identity: the beacon label ("B01"...) is unique per plot.
+    var id: String { label }
 }
 
 private struct BeaconMarker: View {
@@ -992,8 +1015,7 @@ private struct OccupantsTable: View {
                 ("Learner", .infinity),
                 ("Session", 100),
                 ("Duration", 130),
-                ("Status", 110),
-                ("Last Update", 110)
+                ("Status", 110)
             ])
 
             if case .loading = state {
@@ -1011,7 +1033,6 @@ private struct OccupantsTable: View {
                                 Text(row.status.titleCasedStatus)
                                     .foregroundStyle(statusColor(row.status))
                                     .tableCell(width: 110)
-                                Text("Now").tableCell(width: 110)
                             }
                             .frame(height: 46)
                             .overlay(alignment: .bottom) {
@@ -1110,10 +1131,10 @@ private struct SettingsView: View {
                         }
 
                         HStack {
-                            if let message = viewModel.saveMessage {
-                                Text(message)
+                            if let outcome = viewModel.saveOutcome {
+                                Text(outcome.text)
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(message == "Settings saved" ? AegisColors.activeGreen : Color.red)
+                                    .foregroundStyle(outcome.isSuccess ? AegisColors.activeGreen : Color.red)
                             }
                             Spacer()
                             Button {
@@ -1327,6 +1348,7 @@ private struct MetricCard: View {
     let iconBackground: Color
     let title: String
     let value: String
+    var caption: String?
 
     var body: some View {
         HStack(spacing: 20) {
@@ -1339,7 +1361,7 @@ private struct MetricCard: View {
             }
             .frame(width: 66, height: 66)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.black)
@@ -1348,6 +1370,11 @@ private struct MetricCard: View {
                 Text(value)
                     .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(.black)
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(AegisColors.mutedText)
+                }
             }
             Spacer(minLength: 0)
         }

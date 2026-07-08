@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AdministrationView: View {
     @ObservedObject var viewModel: AdministrationViewModel
@@ -465,7 +467,9 @@ private struct BeaconManagementToolbar: View {
     }
 }
 
-private struct AdminPaginationFooter: View {
+/// Shared pagination footer used by the Administration tabs and the
+/// Dashboard attendance table.
+struct AdminPaginationFooter: View {
     let summary: String
     let outcome: ActionOutcome?
     let canGoPrevious: Bool
@@ -1167,53 +1171,219 @@ struct ReportsView: View {
                 Text("Reports")
                     .screenTitle()
 
-                WhitePanel {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Label("Generate Attendance Rollup", systemImage: "doc.text.fill")
-                            .font(.system(size: 16, weight: .bold))
+                attendanceReportPanel
 
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .top, spacing: 28) {
-                                reportFields
-                                reportResult
-                                Spacer()
-                            }
-
-                            VStack(alignment: .leading, spacing: 18) {
-                                reportFields
-                                reportResult
-                            }
-                        }
-
-                        HStack {
-                            Spacer()
-                            Button {
-                                Task { await viewModel.runRollup(sessionStore: sessionStore) }
-                            } label: {
-                                Label(viewModel.isRunning ? "Running..." : "Run Rollup", systemImage: "arrow.clockwise")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 16)
-                                    .frame(height: 34)
-                                    .background(AegisColors.teal)
-                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(viewModel.isRunning)
-                        }
-
-                        if case let .failed(message) = viewModel.state {
-                            ErrorBanner(message: message)
-                        }
-                    }
-                }
-                .frame(maxWidth: 760, alignment: .leading)
+                rollupPanel
 
                 Spacer(minLength: 0)
             }
             .screenPadding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    // MARK: Attendance report
+
+    private var attendanceReportPanel: some View {
+        WhitePanel {
+            VStack(alignment: .leading, spacing: 20) {
+                Label("Attendance Report", systemImage: "chart.bar.doc.horizontal")
+                    .font(.system(size: 16, weight: .bold))
+
+                reportControls
+
+                if let report = viewModel.report {
+                    reportSummaryCards(report)
+                    ReportLearnersTable(rows: report.perLearner, state: viewModel.reportState)
+                    Text("\(report.from) to \(report.to) \u{2022} \(report.daysWithSessions) days with sessions")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AegisColors.mutedText)
+                } else if case .loading = viewModel.reportState {
+                    TableMessage("Generating report...")
+                } else if case .empty = viewModel.reportState {
+                    TableMessage("No attendance data in the selected range.")
+                }
+
+                if let outcome = viewModel.reportOutcome {
+                    Text(outcome.text)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(outcome.isSuccess ? AegisColors.activeGreen : Color.red)
+                }
+
+                if case let .failed(message) = viewModel.reportState {
+                    ErrorBanner(message: message)
+                }
+            }
+        }
+        .frame(maxWidth: 860, alignment: .leading)
+    }
+
+    private var reportControls: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .bottom, spacing: 16) {
+                reportRangeFields
+                reportActionButtons
+            }
+
+            VStack(alignment: .leading, spacing: 14) {
+                reportRangeFields
+                reportActionButtons
+            }
+        }
+    }
+
+    private var reportRangeFields: some View {
+        HStack(alignment: .bottom, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("From")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(AegisColors.mutedText)
+                DatePicker("From", selection: $viewModel.reportFromDate, displayedComponents: .date)
+                    .labelsHidden()
+                    .datePickerStyle(.field)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("To")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(AegisColors.mutedText)
+                DatePicker("To", selection: $viewModel.reportToDate, displayedComponents: .date)
+                    .labelsHidden()
+                    .datePickerStyle(.field)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Session")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(AegisColors.mutedText)
+                Picker("Session", selection: $viewModel.reportSessionFilter) {
+                    ForEach(SessionFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 90)
+            }
+        }
+    }
+
+    private var reportActionButtons: some View {
+        HStack(spacing: 10) {
+            Button {
+                Task { await viewModel.generateReport(sessionStore: sessionStore) }
+            } label: {
+                Label(viewModel.isGeneratingReport ? "Generating..." : "Generate", systemImage: "chart.bar.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .frame(height: 34)
+                    .background(AegisColors.teal)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isGeneratingReport || viewModel.isDownloadingCSV)
+
+            Button {
+                Task { await downloadCSV() }
+            } label: {
+                Label(viewModel.isDownloadingCSV ? "Downloading..." : "Download CSV", systemImage: "square.and.arrow.down")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AegisColors.teal)
+                    .padding(.horizontal, 16)
+                    .frame(height: 34)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .stroke(AegisColors.teal, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isGeneratingReport || viewModel.isDownloadingCSV)
+        }
+    }
+
+    private func reportSummaryCards(_ report: AttendanceReport) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) {
+                reportMetrics(report)
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                reportMetrics(report)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func reportMetrics(_ report: AttendanceReport) -> some View {
+        RollupMetric(title: "Attendance Rate", value: formatRatePercent(report.summary.attendanceRate))
+        RollupMetric(title: "Learners", value: "\(report.summary.learners)")
+        RollupMetric(title: "Total Late", value: "\(report.summary.totalLate)")
+        RollupMetric(title: "Total Absent", value: "\(report.summary.totalAbsent)")
+    }
+
+    private func downloadCSV() async {
+        guard let data = await viewModel.downloadCSVData(sessionStore: sessionStore) else { return }
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = viewModel.suggestedCSVFilename
+        panel.canCreateDirectories = true
+        if let csvType = UTType(filenameExtension: "csv") {
+            panel.allowedContentTypes = [csvType]
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try data.write(to: url)
+            viewModel.reportOutcome = .success("CSV saved to \(url.lastPathComponent)")
+        } catch {
+            viewModel.reportOutcome = .failure("Could not save the CSV: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: Rollup (secondary action)
+
+    private var rollupPanel: some View {
+        WhitePanel {
+            VStack(alignment: .leading, spacing: 20) {
+                Label("Generate Attendance Rollup", systemImage: "doc.text.fill")
+                    .font(.system(size: 16, weight: .bold))
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 28) {
+                        reportFields
+                        reportResult
+                        Spacer()
+                    }
+
+                    VStack(alignment: .leading, spacing: 18) {
+                        reportFields
+                        reportResult
+                    }
+                }
+
+                HStack {
+                    Spacer()
+                    Button {
+                        Task { await viewModel.runRollup(sessionStore: sessionStore) }
+                    } label: {
+                        Label(viewModel.isRunning ? "Running..." : "Run Rollup", systemImage: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .frame(height: 34)
+                            .background(AegisColors.teal)
+                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.isRunning)
+                }
+
+                if case let .failed(message) = viewModel.state {
+                    ErrorBanner(message: message)
+                }
+            }
+        }
+        .frame(maxWidth: 760, alignment: .leading)
     }
 
     private var reportFields: some View {
@@ -1263,6 +1433,47 @@ struct ReportsView: View {
                 Text(message)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(message == "Rollup completed" ? AegisColors.activeGreen : Color.red)
+            }
+        }
+    }
+}
+
+private struct ReportLearnersTable: View {
+    let rows: [AttendanceReportLearner]
+    let state: LoadState
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TableHeader(columns: [
+                ("Learner", .infinity),
+                ("Session", 90),
+                ("Present", 90),
+                ("Late", 80),
+                ("Absent", 90),
+                ("Rate", 90)
+            ])
+
+            if rows.isEmpty {
+                TableMessage("No learners in the selected range.")
+            } else {
+                ForEach(rows) { learner in
+                    HStack(spacing: 0) {
+                        Text(learner.name).tableCell(maxWidth: .infinity, alignment: .leading)
+                        Text(learner.session).tableCell(width: 90)
+                        Text("\(learner.present)").tableCell(width: 90)
+                        Text("\(learner.late)")
+                            .foregroundStyle(learner.late > 0 ? AegisColors.inactiveYellow : .black)
+                            .tableCell(width: 80)
+                        Text("\(learner.absent)")
+                            .foregroundStyle(learner.absent > 0 ? Color.red : .black)
+                            .tableCell(width: 90)
+                        Text(formatRatePercent(learner.attendanceRate)).tableCell(width: 90)
+                    }
+                    .frame(height: 44)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                    }
+                }
             }
         }
     }

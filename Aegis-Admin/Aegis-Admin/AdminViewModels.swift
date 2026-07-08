@@ -41,6 +41,23 @@ final class DashboardViewModel: ObservableObject {
     @Published var state: LoadState = .idle
     @Published var searchText = ""
     @Published var sessionFilter: SessionFilter = .all
+    @Published var total = 0
+    @Published var page = 1
+    @Published var perPage = 100
+
+    /// One in-flight overview load; a new intent cancels the prior one so a
+    /// slow, stale response can never overwrite fresher state.
+    private var overviewLoadTask: Task<Void, Never>?
+
+    var canGoPrevious: Bool { page > 1 }
+    var canGoNext: Bool { page * perPage < total }
+
+    var pageSummary: String {
+        guard total > 0 else { return "Showing 0 learners" }
+        let start = ((page - 1) * perPage) + 1
+        let end = min(page * perPage, total)
+        return "Showing \(start)-\(end) of \(total) learners"
+    }
 
     var formattedDate: String {
         let formatter = DateFormatter()
@@ -57,21 +74,76 @@ final class DashboardViewModel: ObservableObject {
     func load(sessionStore: SessionStore) async {
         state = .loading
         do {
-            async let summary = sessionStore.dashboardSummary()
-            async let rows = sessionStore.overview(search: searchText, sessionFilter: sessionFilter)
-            self.summary = try await summary
-            self.overviewRows = try await rows
-            state = overviewRows.isEmpty ? .empty : .loaded
+            summary = try await sessionStore.dashboardSummary()
         } catch {
             state = .failed(readableMessage(for: error))
+            return
         }
+        await runOverviewFetch(sessionStore: sessionStore)
     }
 
-    func reloadOverview(sessionStore: SessionStore) async {
+    /// Filter/search change: reset to the first page and refetch.
+    func applyFilters(sessionStore: SessionStore) async {
+        page = 1
+        await runOverviewFetch(sessionStore: sessionStore)
+    }
+
+    func nextPage(sessionStore: SessionStore) async {
+        guard canGoNext else { return }
+        page += 1
+        await runOverviewFetch(sessionStore: sessionStore)
+    }
+
+    func previousPage(sessionStore: SessionStore) async {
+        guard canGoPrevious else { return }
+        page -= 1
+        await runOverviewFetch(sessionStore: sessionStore)
+    }
+
+    /// Cancels any in-flight overview fetch and starts a fresh one, so a slow
+    /// response for an old page/filter can never overwrite newer state.
+    private func runOverviewFetch(sessionStore: SessionStore) async {
+        overviewLoadTask?.cancel()
+        let task = Task { await self.fetchOverview(sessionStore: sessionStore) }
+        overviewLoadTask = task
+        await task.value
+    }
+
+    private static func lastValidPage(total: Int, perPage: Int) -> Int {
+        let size = max(perPage, 1)
+        return max(1, Int((Double(total) / Double(size)).rounded(.up)))
+    }
+
+    private func fetchOverview(sessionStore: SessionStore) async {
         do {
-            overviewRows = try await sessionStore.overview(search: searchText, sessionFilter: sessionFilter)
+            var result = try await sessionStore.overview(
+                search: FormValidators.sanitizedSearchTerm(searchText),
+                sessionFilter: sessionFilter,
+                page: page,
+                perPage: perPage
+            )
+            try Task.checkCancellation()
+            // Clamp: a shrunken result set can leave the current page past the
+            // end; refetch at the last valid page.
+            let lastPage = Self.lastValidPage(total: result.total, perPage: result.perPage)
+            if result.page > lastPage {
+                result = try await sessionStore.overview(
+                    search: FormValidators.sanitizedSearchTerm(searchText),
+                    sessionFilter: sessionFilter,
+                    page: lastPage,
+                    perPage: perPage
+                )
+                try Task.checkCancellation()
+            }
+            overviewRows = result.rows
+            total = result.total
+            page = result.page
+            perPage = result.perPage
             state = overviewRows.isEmpty ? .empty : .loaded
+        } catch is CancellationError {
+            // Superseded by a newer fetch; let it own the state.
         } catch {
+            guard !Task.isCancelled else { return }
             state = .failed(readableMessage(for: error))
         }
     }
@@ -178,7 +250,7 @@ final class SettingsViewModel: ObservableObject {
     @Published var sessionConfigs = SessionConfigs.empty
     @Published var systemConfig = SystemConfig.empty
     @Published var state: LoadState = .idle
-    @Published var saveMessage: String?
+    @Published var saveOutcome: ActionOutcome?
     @Published var isSaving = false
 
     func load(sessionStore: SessionStore) async {
@@ -194,19 +266,45 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
+    /// The three PUTs run independently and each outcome is reported, so a
+    /// mid-sequence failure never silently drops the later requests.
     func save(sessionStore: SessionStore) async {
         isSaving = true
-        saveMessage = nil
+        saveOutcome = nil
+
+        var parts: [String] = []
+        var anyFailed = false
+
         do {
             try await sessionStore.updateSessionConfig(session: "AM", config: sessionConfigs.am)
-            try await sessionStore.updateSessionConfig(session: "PM", config: sessionConfigs.pm)
-            try await sessionStore.updateSystemConfig(systemConfig)
-            saveMessage = "Settings saved"
-            state = .loaded
+            parts.append("AM saved")
         } catch {
-            saveMessage = readableMessage(for: error)
-            state = .failed(readableMessage(for: error))
+            anyFailed = true
+            parts.append("AM failed: \(readableMessage(for: error))")
         }
+
+        do {
+            try await sessionStore.updateSessionConfig(session: "PM", config: sessionConfigs.pm)
+            parts.append("PM saved")
+        } catch {
+            anyFailed = true
+            parts.append("PM failed: \(readableMessage(for: error))")
+        }
+
+        do {
+            try await sessionStore.updateSystemConfig(systemConfig)
+            parts.append("System saved")
+        } catch {
+            anyFailed = true
+            parts.append("System failed: \(readableMessage(for: error))")
+        }
+
+        if anyFailed {
+            saveOutcome = .failure(parts.joined(separator: ", "))
+        } else {
+            saveOutcome = .success("Settings saved")
+        }
+        state = .loaded
         isSaving = false
     }
 }
@@ -664,12 +762,96 @@ final class ReportsViewModel: ObservableObject {
     @Published var isRunning = false
     @Published var message: String?
 
+    // MARK: Attendance report state
+    @Published var reportFromDate = Calendar.current.date(byAdding: .day, value: -6, to: Date()) ?? Date()
+    @Published var reportToDate = Date()
+    @Published var reportSessionFilter: SessionFilter = .all
+    @Published var report: AttendanceReport?
+    @Published var reportState: LoadState = .idle
+    @Published var isGeneratingReport = false
+    @Published var isDownloadingCSV = false
+    @Published var reportOutcome: ActionOutcome?
+
+    /// Backend caps the report range at 92 days.
+    static let maxReportRangeDays = 92
+
     private static let rollupDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+
+    var reportFromString: String {
+        Self.rollupDateFormatter.string(from: reportFromDate)
+    }
+
+    var reportToString: String {
+        Self.rollupDateFormatter.string(from: reportToDate)
+    }
+
+    var suggestedCSVFilename: String {
+        "aegis-attendance-\(reportFromString)-\(reportToString).csv"
+    }
+
+    /// Mirrors the backend zod validation: from <= to and range <= 92 days.
+    /// Returns nil when valid.
+    func validateReportRange() -> String? {
+        let calendar = Calendar.current
+        let from = calendar.startOfDay(for: reportFromDate)
+        let to = calendar.startOfDay(for: reportToDate)
+        if from > to {
+            return "The start date must be on or before the end date."
+        }
+        let days = (calendar.dateComponents([.day], from: from, to: to).day ?? 0) + 1
+        if days > Self.maxReportRangeDays {
+            return "The date range must not exceed \(Self.maxReportRangeDays) days."
+        }
+        return nil
+    }
+
+    func generateReport(sessionStore: SessionStore) async {
+        if let validationMessage = validateReportRange() {
+            reportOutcome = .failure(validationMessage)
+            return
+        }
+        isGeneratingReport = true
+        reportOutcome = nil
+        reportState = .loading
+        do {
+            let output = try await sessionStore.attendanceReport(
+                from: reportFromString,
+                to: reportToString,
+                session: reportSessionFilter
+            )
+            report = output
+            reportState = output.perLearner.isEmpty ? .empty : .loaded
+        } catch {
+            reportState = .failed(readableMessage(for: error))
+        }
+        isGeneratingReport = false
+    }
+
+    /// Fetches the CSV bytes; the view handles the NSSavePanel + disk write.
+    func downloadCSVData(sessionStore: SessionStore) async -> Data? {
+        if let validationMessage = validateReportRange() {
+            reportOutcome = .failure(validationMessage)
+            return nil
+        }
+        isDownloadingCSV = true
+        reportOutcome = nil
+        defer { isDownloadingCSV = false }
+        do {
+            return try await sessionStore.attendanceReportCSV(
+                from: reportFromString,
+                to: reportToString,
+                session: reportSessionFilter
+            )
+        } catch {
+            reportOutcome = .failure(readableMessage(for: error))
+            return nil
+        }
+    }
 
     func runRollup(sessionStore: SessionStore) async {
         isRunning = true

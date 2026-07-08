@@ -81,12 +81,22 @@ struct DashboardSummary: Equatable {
 }
 
 struct AttendanceOverviewRow: Identifiable, Equatable {
-    let id = UUID()
     let name: String
     let session: String
     let clockedInAt: String?
     let clockedOutAt: String?
     let status: String
+
+    /// Stable identity across refetches: the overview lists each learner at
+    /// most once per session per day, so name+session identifies a row.
+    var id: String { "\(name)|\(session)" }
+}
+
+struct AttendanceOverviewPage: Equatable {
+    let rows: [AttendanceOverviewRow]
+    let total: Int
+    let page: Int
+    let perPage: Int
 }
 
 struct Room: Identifiable, Equatable {
@@ -390,6 +400,51 @@ struct AdminUserForm: Identifiable, Equatable {
 struct RollupResult: Equatable {
     let processed: Int
     let skippedLeave: Int
+}
+
+// MARK: - Attendance report (GET /api/v1/admin/reports/attendance)
+
+struct AttendanceReport: Equatable {
+    let from: String
+    let to: String
+    let daysWithSessions: Int
+    let summary: AttendanceReportSummary
+    let perLearner: [AttendanceReportLearner]
+    let records: [AttendanceReportRecord]
+}
+
+struct AttendanceReportSummary: Equatable {
+    let learners: Int
+    let attendanceRate: Double
+    let totalLate: Int
+    let totalAbsent: Int
+}
+
+struct AttendanceReportLearner: Identifiable, Equatable {
+    let userID: Int
+    let name: String
+    let session: String
+    let present: Int
+    let late: Int
+    let absent: Int
+    let attendanceRate: Double
+
+    /// A learner appears once per session in the aggregate.
+    var id: String { "\(userID)|\(session)" }
+}
+
+struct AttendanceReportRecord: Equatable {
+    let date: String
+    let userID: Int
+    let name: String
+    let session: String
+    let status: String
+    let clockedInAt: String?
+    let clockedOutAt: String?
+}
+
+func formatRatePercent(_ rate: Double) -> String {
+    String(format: "%.1f%%", rate * 100)
 }
 
 extension String {

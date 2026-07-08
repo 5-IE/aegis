@@ -200,9 +200,15 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    func overview(search: String, sessionFilter: SessionFilter) async throws -> [AttendanceOverviewRow] {
+    func overview(search: String, sessionFilter: SessionFilter, page: Int, perPage: Int) async throws -> AttendanceOverviewPage {
         try await authorized { token in
-            try await api.getOverview(accessToken: token, search: search, sessionFilter: sessionFilter)
+            try await api.getOverview(
+                accessToken: token,
+                search: search,
+                sessionFilter: sessionFilter,
+                page: page,
+                perPage: perPage
+            )
         }
     }
 
@@ -355,6 +361,18 @@ final class SessionStore: ObservableObject {
     func deleteAdminBeacon(id: Int) async throws {
         try await authorized { token in
             try await api.deleteAdminBeacon(id: id, accessToken: token)
+        }
+    }
+
+    func attendanceReport(from: String, to: String, session: SessionFilter) async throws -> AttendanceReport {
+        try await authorized { token in
+            try await api.getAttendanceReport(from: from, to: to, session: session, accessToken: token)
+        }
+    }
+
+    func attendanceReportCSV(from: String, to: String, session: SessionFilter) async throws -> Data {
+        try await authorized { token in
+            try await api.downloadAttendanceReportCSV(from: from, to: to, session: session, accessToken: token)
         }
     }
 
