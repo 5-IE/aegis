@@ -13,8 +13,6 @@ struct HomeView: View {
                 .frame(height: 228)
                 .ignoresSafeArea(edges: .top)
  
-            // Everything below is fixed (non-scrolling) except the
-            // Attendance History list, which scrolls on its own.
             VStack(alignment: .leading, spacing: 24) {
  
                 // Greeting header
@@ -59,7 +57,6 @@ struct HomeView: View {
                     TodayAttendanceCard(status: .checkedIn(time: viewModel.checkedInAt))
                 }
  
-                // Attendance History (recent) — only this section scrolls
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Attendance History")
@@ -83,24 +80,19 @@ struct HomeView: View {
                         }
                     }
  
-                    ScrollView {
-                        VStack(spacing: 4) {
-                            ForEach(Array(viewModel.attendanceHistory.enumerated()), id: \.element.date) { index, record in
-                                AttendanceRow(record: record)
-                                if index < viewModel.attendanceHistory.count - 1 {
-                                    Divider()
-                                }
+                    VStack(spacing: 4) {
+                        ForEach(Array(viewModel.attendanceHistory.enumerated()), id: \.element.date) { index, record in
+                            AttendanceRow(record: record)
+                            if index < viewModel.attendanceHistory.count - 1 {
+                                Divider()
                             }
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
                     .background(Theme.cardBackground)
                     .cornerRadius(10)
                     .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)
-                    // Cap the height so it scrolls internally instead of
-                    // pushing the rest of the layout off screen.
-                    .frame(maxHeight: 360)
                 }
             }
             .padding(.horizontal, 14)
