@@ -15,10 +15,12 @@ import { rollupRouter } from './routes/admin/rollup.js';
 import { usersRouter } from './routes/admin/users.js';
 import { beaconsAdminRouter } from './routes/admin/beacons.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { requestLogger } from './middleware/requestLogger.js';
 
 export function buildApp(): express.Express {
   const app = express();
   app.set('trust proxy', 1);
+  app.use(requestLogger);
   app.use(express.json({
     limit: '64kb',
     verify: (req, _res, buf) => {
