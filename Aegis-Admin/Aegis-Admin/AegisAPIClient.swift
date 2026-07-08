@@ -553,6 +553,122 @@ struct RollupRequest: Encodable {
     }
 }
 
+struct AttendanceReportResponse: Decodable {
+    let range: Range
+    let summary: Summary
+    let perLearner: [Learner]
+    let records: [Record]
+
+    enum CodingKeys: String, CodingKey {
+        case range
+        case summary
+        case perLearner = "per_learner"
+        case records
+    }
+
+    struct Range: Decodable {
+        let from: String
+        let to: String
+        let daysWithSessions: Int
+
+        enum CodingKeys: String, CodingKey {
+            case from
+            case to
+            case daysWithSessions = "days_with_sessions"
+        }
+    }
+
+    struct Summary: Decodable {
+        let learners: Int
+        let attendanceRate: Double
+        let totalLate: Int
+        let totalAbsent: Int
+
+        enum CodingKeys: String, CodingKey {
+            case learners
+            case attendanceRate = "attendance_rate"
+            case totalLate = "total_late"
+            case totalAbsent = "total_absent"
+        }
+    }
+
+    struct Learner: Decodable {
+        let userID: Int
+        let name: String
+        let session: String
+        let present: Int
+        let late: Int
+        let absent: Int
+        let attendanceRate: Double
+
+        enum CodingKeys: String, CodingKey {
+            case userID = "user_id"
+            case name
+            case session
+            case present
+            case late
+            case absent
+            case attendanceRate = "attendance_rate"
+        }
+    }
+
+    struct Record: Decodable {
+        let date: String
+        let userID: Int
+        let name: String
+        let session: String
+        let status: String
+        let clockedInAt: String?
+        let clockedOutAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case date
+            case userID = "user_id"
+            case name
+            case session
+            case status
+            case clockedInAt = "clocked_in_at"
+            case clockedOutAt = "clocked_out_at"
+        }
+    }
+
+    var model: AttendanceReport {
+        AttendanceReport(
+            from: range.from,
+            to: range.to,
+            daysWithSessions: range.daysWithSessions,
+            summary: AttendanceReportSummary(
+                learners: summary.learners,
+                attendanceRate: summary.attendanceRate,
+                totalLate: summary.totalLate,
+                totalAbsent: summary.totalAbsent
+            ),
+            perLearner: perLearner.map {
+                AttendanceReportLearner(
+                    userID: $0.userID,
+                    name: $0.name,
+                    session: $0.session,
+                    present: $0.present,
+                    late: $0.late,
+                    absent: $0.absent,
+                    attendanceRate: $0.attendanceRate
+                )
+            },
+            records: records.map {
+                AttendanceReportRecord(
+                    date: $0.date,
+                    userID: $0.userID,
+                    name: $0.name,
+                    session: $0.session,
+                    status: $0.status,
+                    clockedInAt: $0.clockedInAt,
+                    clockedOutAt: $0.clockedOutAt
+                )
+            }
+        )
+    }
+}
+
 struct RollupResponse: Decodable {
     let processed: Int
     let skippedLeave: Int
@@ -573,7 +689,7 @@ final class AegisAPIClient {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(baseURL: URL = URL(string: "http://10.64.58.125:3000")!, session: URLSession = .shared) {
+    init(baseURL: URL = AppEnvironment.current.resolvedBaseURL, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
     }
@@ -598,10 +714,16 @@ final class AegisAPIClient {
         return response.model
     }
 
-    func getOverview(accessToken: String, search: String, sessionFilter: SessionFilter) async throws -> [AttendanceOverviewRow] {
+    func getOverview(
+        accessToken: String,
+        search: String,
+        sessionFilter: SessionFilter,
+        page: Int,
+        perPage: Int
+    ) async throws -> AttendanceOverviewPage {
         var query: [URLQueryItem] = [
-            URLQueryItem(name: "page", value: "1"),
-            URLQueryItem(name: "per_page", value: "100")
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "per_page", value: "\(perPage)")
         ]
         let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
@@ -615,7 +737,12 @@ final class AegisAPIClient {
             queryItems: query,
             accessToken: accessToken
         )
-        return response.list.map(\.model)
+        return AttendanceOverviewPage(
+            rows: response.list.map(\.model),
+            total: response.total,
+            page: response.page,
+            perPage: response.perPage
+        )
     }
 
     func getRooms(accessToken: String) async throws -> [Room] {
@@ -853,6 +980,71 @@ final class AegisAPIClient {
             method: "DELETE",
             accessToken: accessToken
         )
+    }
+
+    func getAttendanceReport(
+        from: String,
+        to: String,
+        session: SessionFilter,
+        accessToken: String
+    ) async throws -> AttendanceReport {
+        let response: AttendanceReportResponse = try await send(
+            path: "/api/v1/admin/reports/attendance",
+            queryItems: attendanceReportQuery(from: from, to: to, session: session),
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func downloadAttendanceReportCSV(
+        from: String,
+        to: String,
+        session: SessionFilter,
+        accessToken: String
+    ) async throws -> Data {
+        var query = attendanceReportQuery(from: from, to: to, session: session)
+        query.append(URLQueryItem(name: "format", value: "csv"))
+        do {
+            let request = try makeRequest(
+                path: "/api/v1/admin/reports/attendance",
+                method: "GET",
+                queryItems: query,
+                body: Optional<EmptyBody>.none,
+                accessToken: accessToken
+            )
+            // `self.session`: the `session` parameter (a SessionFilter)
+            // shadows the URLSession property here.
+            let (data, response) = try await self.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw AegisAPIError.invalidResponse
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                if let backend = try? decoder.decode(BackendErrorResponse.self, from: data) {
+                    throw AegisAPIError.backend(code: backend.error, message: backend.message, statusCode: http.statusCode)
+                }
+                throw AegisAPIError.backend(
+                    code: "http_\(http.statusCode)",
+                    message: "Request failed with status \(http.statusCode).",
+                    statusCode: http.statusCode
+                )
+            }
+            return data
+        } catch let error as AegisAPIError {
+            throw error
+        } catch {
+            throw AegisAPIError.network(error.localizedDescription)
+        }
+    }
+
+    private func attendanceReportQuery(from: String, to: String, session: SessionFilter) -> [URLQueryItem] {
+        var query: [URLQueryItem] = [
+            URLQueryItem(name: "from", value: from),
+            URLQueryItem(name: "to", value: to)
+        ]
+        if let value = session.queryValue {
+            query.append(URLQueryItem(name: "session", value: value))
+        }
+        return query
     }
 
     func runRollup(date: String?, userID: Int?, accessToken: String) async throws -> RollupResult {

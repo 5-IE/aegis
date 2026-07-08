@@ -34,6 +34,25 @@ enum LoadState: Equatable {
     case failed(String)
 }
 
+/// The result of a user-triggered mutation (create/update/delete/reset).
+/// Views color and place the message based on the case, never on the text.
+enum ActionOutcome: Equatable {
+    case success(String)
+    case failure(String)
+
+    var text: String {
+        switch self {
+        case let .success(text), let .failure(text):
+            return text
+        }
+    }
+
+    var isSuccess: Bool {
+        if case .success = self { return true }
+        return false
+    }
+}
+
 struct UserSession: Codable, Equatable {
     let id: Int
     let username: String
@@ -62,12 +81,22 @@ struct DashboardSummary: Equatable {
 }
 
 struct AttendanceOverviewRow: Identifiable, Equatable {
-    let id = UUID()
     let name: String
     let session: String
     let clockedInAt: String?
     let clockedOutAt: String?
     let status: String
+
+    /// Stable identity across refetches: the overview lists each learner at
+    /// most once per session per day, so name+session identifies a row.
+    var id: String { "\(name)|\(session)" }
+}
+
+struct AttendanceOverviewPage: Equatable {
+    let rows: [AttendanceOverviewRow]
+    let total: Int
+    let page: Int
+    let perPage: Int
 }
 
 struct Room: Identifiable, Equatable {
@@ -290,6 +319,15 @@ struct AdminBeaconsPage: Equatable {
     let perPage: Int
 }
 
+/// Per-room beacon rollup used only by the Rooms tab. Kept separate from the
+/// Beacons tab's paginated, filtered list so the two tabs never clobber each
+/// other's data.
+struct RoomBeaconSummary: Equatable {
+    var count: Int
+
+    var hasBeacons: Bool { count > 0 }
+}
+
 struct AdminBeaconForm: Identifiable, Equatable {
     let formID = UUID()
     var beaconID: Int?
@@ -362,6 +400,51 @@ struct AdminUserForm: Identifiable, Equatable {
 struct RollupResult: Equatable {
     let processed: Int
     let skippedLeave: Int
+}
+
+// MARK: - Attendance report (GET /api/v1/admin/reports/attendance)
+
+struct AttendanceReport: Equatable {
+    let from: String
+    let to: String
+    let daysWithSessions: Int
+    let summary: AttendanceReportSummary
+    let perLearner: [AttendanceReportLearner]
+    let records: [AttendanceReportRecord]
+}
+
+struct AttendanceReportSummary: Equatable {
+    let learners: Int
+    let attendanceRate: Double
+    let totalLate: Int
+    let totalAbsent: Int
+}
+
+struct AttendanceReportLearner: Identifiable, Equatable {
+    let userID: Int
+    let name: String
+    let session: String
+    let present: Int
+    let late: Int
+    let absent: Int
+    let attendanceRate: Double
+
+    /// A learner appears once per session in the aggregate.
+    var id: String { "\(userID)|\(session)" }
+}
+
+struct AttendanceReportRecord: Equatable {
+    let date: String
+    let userID: Int
+    let name: String
+    let session: String
+    let status: String
+    let clockedInAt: String?
+    let clockedOutAt: String?
+}
+
+func formatRatePercent(_ rate: Double) -> String {
+    String(format: "%.1f%%", rate * 100)
 }
 
 extension String {
