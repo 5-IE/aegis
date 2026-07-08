@@ -14,8 +14,10 @@ import { systemConfigRouter } from './routes/admin/systemConfig.js';
 import { rollupRouter } from './routes/admin/rollup.js';
 import { usersRouter } from './routes/admin/users.js';
 import { beaconsAdminRouter } from './routes/admin/beacons.js';
+import * as Sentry from '@sentry/node';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
+import { config } from './lib/config.js';
 
 export function buildApp(): express.Express {
   const app = express();
@@ -49,6 +51,12 @@ export function buildApp(): express.Express {
   app.use('/api/v1/admin/rollup', rollupRouter);
   app.use('/api/v1/admin/users', usersRouter);
   app.use('/api/v1/admin/beacons', beaconsAdminRouter);
+
+  // Sentry error handler: after all routes, before our own error handler.
+  // No-op when SENTRY_DSN is unset (init was skipped).
+  if (config.sentry.dsn) {
+    Sentry.setupExpressErrorHandler(app);
+  }
 
   app.use(errorHandler);
   return app;
