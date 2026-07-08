@@ -573,7 +573,7 @@ final class AegisAPIClient {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(baseURL: URL = URL(string: "http://127.0.0.1:3001")!, session: URLSession = .shared) {
+    init(baseURL: URL = URL(string: "http://10.64.58.125:3000")!, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
     }
