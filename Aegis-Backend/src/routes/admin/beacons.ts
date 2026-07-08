@@ -27,12 +27,16 @@ const createBodySchema = z.object({
   name: z.string().min(1).max(100),
   beacon_identifier: z.string().min(1).max(100),
   room_id: z.number().int().positive().nullable().optional(),
+  position_x: z.number().nullable().optional(),
+  position_y: z.number().nullable().optional(),
 }).strict();
 
 const patchBodySchema = z.object({
   name: z.string().min(1).max(100).optional(),
   beacon_identifier: z.string().min(1).max(100).optional(),
   room_id: z.number().int().positive().nullable().optional(),
+  position_x: z.number().nullable().optional(),
+  position_y: z.number().nullable().optional(),
 }).strict();
 
 export const beaconsAdminRouter = Router();

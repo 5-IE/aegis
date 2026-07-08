@@ -6,11 +6,14 @@ export interface DeviceWithRoom {
   name: string;
   identifier: string;
   id_room: number | null;
+  position_x: number | null;
+  position_y: number | null;
   room_name: string | null;
 }
 
 const SELECT_DEVICE = `
-  SELECT d.\`id_device\`, d.\`name\`, d.\`identifier\`, d.\`id_room\`, r.\`name\` AS room_name
+  SELECT d.\`id_device\`, d.\`name\`, d.\`identifier\`, d.\`id_room\`,
+         d.\`position_x\`, d.\`position_y\`, r.\`name\` AS room_name
   FROM \`DEVICE\` d
   LEFT JOIN \`ROOM\` r ON r.\`id_room\` = d.\`id_room\`
 `;
@@ -73,17 +76,25 @@ export async function insertDevice(input: {
   name: string;
   identifier: string;
   id_room: number | null;
+  position_x?: number | null;
+  position_y?: number | null;
 }): Promise<number> {
   const [result] = await pool.query<ResultSetHeader>(
-    'INSERT INTO `DEVICE` (`name`, `identifier`, `id_room`) VALUES (?, ?, ?)',
-    [input.name, input.identifier, input.id_room],
+    'INSERT INTO `DEVICE` (`name`, `identifier`, `id_room`, `position_x`, `position_y`) VALUES (?, ?, ?, ?, ?)',
+    [input.name, input.identifier, input.id_room, input.position_x ?? null, input.position_y ?? null],
   );
   return result.insertId;
 }
 
 export async function updateDevice(
   id: number,
-  patch: { name?: string; identifier?: string; id_room?: number | null },
+  patch: {
+    name?: string;
+    identifier?: string;
+    id_room?: number | null;
+    position_x?: number | null;
+    position_y?: number | null;
+  },
 ): Promise<void> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -98,6 +109,14 @@ export async function updateDevice(
   if (patch.id_room !== undefined) {
     sets.push('`id_room` = ?');
     params.push(patch.id_room);
+  }
+  if (patch.position_x !== undefined) {
+    sets.push('`position_x` = ?');
+    params.push(patch.position_x);
+  }
+  if (patch.position_y !== undefined) {
+    sets.push('`position_y` = ?');
+    params.push(patch.position_y);
   }
   if (sets.length === 0) return;
   params.push(id);
