@@ -1,0 +1,33 @@
+digraph registration {
+  rankdir=TB;
+  bgcolor="white";
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", fillcolor="#ffffff"];
+  edge [fontname="Helvetica", fontsize=9];
+  labelloc="t";
+  label=<<b>Device Registration — one time, first launch</b>>;
+
+  // lifelines as columns
+  subgraph cluster_c { label=<<b>iOS App</b>>; style="rounded,filled"; fillcolor="#eef4ff"; color="#7aa2e3";
+    c1 [label="RegisterViewModel\n.registerDevice()"];
+    c2 [label="CryptoManager\n.publicKeyBase64()"];
+    c3 [label="loadOrCreateKey()\n(Secure Enclave, or software fallback)"];
+    c4 [label="Keychain\nstore key blob\n(enclave: dataRepresentation\nsoftware: rawRepresentation)"];
+    c5 [label="publicKey.x963Representation\n→ base64  (~88 chars)"];
+    c1 -> c2 -> c3 -> c4 -> c5;
+  }
+
+  subgraph cluster_s { label=<<b>Backend</b>>; style="rounded,filled"; fillcolor="#eefaf0"; color="#6fbf7a";
+    s1 [label="POST /api/v1/register-device\nrequireAuth + requireRole('learner')\n(JWT only — NOT signed)"];
+    s2 [label="validate: non-empty string ≤ 256 chars"];
+    s3 [label="updateDevicePublicKey(userId, key)"];
+    s4 [shape=cylinder, label="USER.device_public_key\nVARCHAR(256)\n= raw X9.63 base64"];
+    s1 -> s2 -> s3 -> s4;
+  }
+
+  c5 -> s1 [label="  { device_public_key }\n  Authorization: Bearer <jwt>", color="#2c6cbf", fontcolor="#2c6cbf", penwidth=2];
+  s3 -> c1 [label="  200 { message: registered }", style=dashed, color="#6fbf7a", constraint=false];
+
+  note [shape=note, fillcolor="#fff8dc", label="Why JWT-only: the first registration\ncannot be signature-verified because\nno key is stored yet. Re-install →\nnew key → re-register (overwrites)."];
+  s1 -> note [style=invis];
+}

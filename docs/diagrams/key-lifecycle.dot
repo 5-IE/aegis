@@ -1,0 +1,37 @@
+digraph keylifecycle {
+  rankdir=LR;
+  bgcolor="white";
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", fillcolor="#ffffff"];
+  edge [fontname="Helvetica", fontsize=9];
+  labelloc="t";
+  label=<<b>Key Material — where it lives, what crosses the wire</b>>;
+
+  subgraph cluster_device { label=<<b>iPhone (never leaves)</b>>; style="rounded,filled"; fillcolor="#eef4ff"; color="#7aa2e3";
+    priv [label="PRIVATE key\nSecure Enclave\n(hardware-bound)", fillcolor="#ffe0e0"];
+    kc [shape=cylinder, label="Keychain\nkey blob\n(reload on launch)"];
+    pub [label="PUBLIC key\nraw X9.63 point (65 bytes)"];
+    priv -> kc [label="persist ref", dir=both, style=dashed];
+    priv -> pub [label="derive"];
+  }
+
+  subgraph cluster_wire { label=<<b>Network</b>>; style="rounded,filled"; fillcolor="#f5f5f5"; color="#999999";
+    w1 [label="device_public_key\n(base64, at registration)", fillcolor="#e8f0ff"];
+    w2 [label="X-Signature\n(base64 DER, per request)", fillcolor="#e8f0ff"];
+  }
+
+  subgraph cluster_server { label=<<b>Backend (public key only)</b>>; style="rounded,filled"; fillcolor="#eefaf0"; color="#6fbf7a";
+    db [shape=cylinder, label="USER.device_public_key\nraw X9.63 base64"];
+    wrap [label="x963ToSpkiDer\n(+ 26-byte SPKI header)"];
+    verify [label="createVerify\n(public key can only VERIFY,\nnever sign)"];
+    db -> wrap -> verify;
+  }
+
+  pub -> w1 [label="POST /register-device", color="#2c6cbf", fontcolor="#2c6cbf"];
+  w1 -> db [color="#2c6cbf"];
+  priv -> w2 [label="signs each request", color="#c0392b", fontcolor="#c0392b"];
+  w2 -> verify [label="checked against stored pub", color="#c0392b"];
+
+  note [shape=note, fillcolor="#fff8dc", label="The private key NEVER leaves the device.\nThe server holds ONLY the public key, which\ncannot forge signatures — it can only verify."];
+  verify -> note [style=invis];
+}
