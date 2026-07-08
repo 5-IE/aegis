@@ -88,6 +88,7 @@ final class LiveRadarViewModel: ObservableObject {
     @Published var occupantsSearchText = ""
 
     private var pollTask: Task<Void, Never>?
+    private var selectTask: Task<Void, Never>?
 
     var selectedRoom: Room? {
         rooms.first { $0.id == selectedRoomID }
@@ -120,11 +121,15 @@ final class LiveRadarViewModel: ObservableObject {
 
     func select(roomID: Int, sessionStore: SessionStore) {
         selectedRoomID = roomID
-        Task {
+        selectTask?.cancel()
+        selectTask = Task {
             do {
                 try await loadSelectedRoom(sessionStore: sessionStore, roomID: roomID)
                 state = .loaded
+            } catch is CancellationError {
+                // Superseded by a newer selection; keep whatever it loaded.
             } catch {
+                guard roomID == selectedRoomID else { return }
                 state = .failed(readableMessage(for: error))
             }
         }
@@ -150,15 +155,21 @@ final class LiveRadarViewModel: ObservableObject {
     func stopPolling() {
         pollTask?.cancel()
         pollTask = nil
+        selectTask?.cancel()
+        selectTask = nil
     }
 
     private func loadSelectedRoom(sessionStore: SessionStore, roomID: Int) async throws {
         async let points = sessionStore.roomMap(roomID: roomID)
         async let occupants = sessionStore.currentOccupants(roomID: roomID)
         async let metrics = sessionStore.roomMetrics(roomID: roomID)
-        self.radarPoints = try await points
-        self.occupants = try await occupants
-        self.metrics = try await metrics
+        let loaded = try await (points: points, occupants: occupants, metrics: metrics)
+        // A slower response for a previously selected room must not
+        // overwrite the currently selected room's data.
+        guard roomID == selectedRoomID else { return }
+        self.radarPoints = loaded.points
+        self.occupants = loaded.occupants
+        self.metrics = loaded.metrics
     }
 }
 
