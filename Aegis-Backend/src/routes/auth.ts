@@ -32,6 +32,7 @@ authRouter.post('/login', authRateLimit, async (req, res, next) => {
       refresh_token: result.refreshToken,
       expires_in: result.expiresIn,
       user: result.user,
+      require_device_registration: result.requireDeviceRegistration,
     });
   } catch (err) {
     next(err);
