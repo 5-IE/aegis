@@ -441,6 +441,49 @@ sudo -u aegis bash -c "cd /opt/aegis/Aegis-Backend && npm run migrate"
 sudo systemctl restart aegis-backend
 ```
 
+### One-command deploy (`aegis-deploy`)
+
+The repo ships a deploy script at `Aegis-Backend/scripts/deploy/aegis-deploy`
+that automates the update loop above (fetch → fast-forward → `npm ci` if deps
+changed → migrate → restart → health check). Install it once:
+
+```bash
+sudo install -m 0755 /opt/aegis/Aegis-Backend/scripts/deploy/aegis-deploy /usr/local/bin/aegis-deploy
+```
+
+Then deploy with:
+
+```bash
+aegis-deploy                       # deploys origin/main
+aegis-deploy origin/some-branch    # deploys a specific ref
+```
+
+**Password-less sudo (required).** The script runs `sudo -u aegis …` (git,
+npm, migrate) and `sudo systemctl …` (restart, is-active) non-interactively —
+so `sudo` cannot prompt for a password and you'll get
+`sudo: a password is required`. Grant the deploy user password-less sudo for
+exactly those commands. Run `sudo visudo -f /etc/sudoers.d/aegis-deploy` and add
+(replace `youruser`, and confirm the systemctl path with `which systemctl`):
+
+```sudoers
+# Deploy user: run repo/git/npm steps as the aegis service user without a password
+youruser ALL=(aegis) NOPASSWD: ALL
+# ...and restart/check the service without a password
+youruser ALL=(root)  NOPASSWD: /usr/bin/systemctl restart aegis-backend, /usr/bin/systemctl is-active aegis-backend
+```
+
+`visudo` validates syntax and saves the file `0440`. Verify it works
+non-interactively (`-n` never prompts):
+
+```bash
+sudo -n -u aegis true && echo "aegis OK"
+sudo -n systemctl is-active aegis-backend
+```
+
+If both run without asking for a password, `aegis-deploy` will work. (Scope the
+`(aegis) NOPASSWD` more tightly than `ALL` if your security posture requires it,
+but the aegis user is unprivileged, so this is low risk.)
+
 Rollback:
 
 ```bash
