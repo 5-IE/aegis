@@ -14,23 +14,34 @@ struct AdministrationView: View {
     @State private var beaconDeleteTarget: AdminBeacon?
 
     var body: some View {
+        administrationContent
+            .task {
+                await loadIfNeeded()
+            }
+            .modifier(AdministrationSheets(
+                userForm: $userForm,
+                passwordResetUser: $passwordResetUser,
+                roomForm: $roomForm,
+                beaconForm: $beaconForm,
+                viewModel: viewModel,
+                sessionStore: sessionStore
+            ))
+            .modifier(AdministrationAlerts(
+                deleteTarget: $deleteTarget,
+                roomDeleteTarget: $roomDeleteTarget,
+                beaconDeleteTarget: $beaconDeleteTarget,
+                viewModel: viewModel,
+                sessionStore: sessionStore
+            ))
+    }
+
+    private var administrationContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 20) {
                 Text("Administration")
                     .screenTitle()
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(AdministrationMode.allCases) { mode in
-                            AdminModePill(
-                                title: mode.rawValue,
-                                isSelected: viewModel.selectedMode == mode
-                            ) {
-                                viewModel.selectMode(mode, sessionStore: sessionStore)
-                            }
-                        }
-                    }
-                }
+                modeTabs
 
                 activeAdministrationPanel
 
@@ -39,90 +50,26 @@ struct AdministrationView: View {
             .screenPadding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task {
-            if viewModel.state == .idle {
-                await viewModel.load(sessionStore: sessionStore)
-            }
-        }
-        .sheet(item: $userForm) { form in
-            AdminUserFormSheet(form: form, isSaving: viewModel.isSaving) { draft in
-                await viewModel.save(form: draft, sessionStore: sessionStore)
-            }
-        }
-        .sheet(item: $passwordResetUser) { user in
-            PasswordResetSheet(user: user, isSaving: viewModel.isSaving) { password in
-                await viewModel.resetPassword(user: user, newPassword: password, sessionStore: sessionStore)
-            }
-        }
-        .sheet(item: $roomForm) { form in
-            AdminRoomFormSheet(form: form, isSaving: viewModel.isSaving) { draft in
-                await viewModel.saveRoom(form: draft, sessionStore: sessionStore)
-            }
-        }
-        .sheet(item: $beaconForm) { form in
-            AdminBeaconFormSheet(form: form, rooms: viewModel.rooms, isSaving: viewModel.isSaving) { draft in
-                await viewModel.saveBeacon(form: draft, sessionStore: sessionStore)
-            }
-        }
-        .alert(
-            "Deactivate User?",
-            isPresented: Binding(
-                get: { deleteTarget != nil },
-                set: { if !$0 { deleteTarget = nil } }
-            ),
-            presenting: deleteTarget
-        ) { user in
-            Button("Deactivate", role: .destructive) {
-                Task {
-                    await viewModel.delete(user: user, sessionStore: sessionStore)
-                    deleteTarget = nil
+    }
+
+    private var modeTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(AdministrationMode.allCases) { mode in
+                    AdminModePill(
+                        title: mode.rawValue,
+                        isSelected: viewModel.selectedMode == mode
+                    ) {
+                        viewModel.selectMode(mode, sessionStore: sessionStore)
+                    }
                 }
             }
-            Button("Cancel", role: .cancel) {
-                deleteTarget = nil
-            }
-        } message: { user in
-            Text(user.displayName)
         }
-        .alert(
-            "Delete Room?",
-            isPresented: Binding(
-                get: { roomDeleteTarget != nil },
-                set: { if !$0 { roomDeleteTarget = nil } }
-            ),
-            presenting: roomDeleteTarget
-        ) { room in
-            Button("Delete Room", role: .destructive) {
-                Task {
-                    await viewModel.delete(room: room, sessionStore: sessionStore)
-                    roomDeleteTarget = nil
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                roomDeleteTarget = nil
-            }
-        } message: { room in
-            Text("This will delete \(room.name). Rooms with recorded presence cannot be deleted by the backend.")
-        }
-        .alert(
-            "Delete Beacon?",
-            isPresented: Binding(
-                get: { beaconDeleteTarget != nil },
-                set: { if !$0 { beaconDeleteTarget = nil } }
-            ),
-            presenting: beaconDeleteTarget
-        ) { beacon in
-            Button("Delete Beacon", role: .destructive) {
-                Task {
-                    await viewModel.delete(beacon: beacon, sessionStore: sessionStore)
-                    beaconDeleteTarget = nil
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                beaconDeleteTarget = nil
-            }
-        } message: { beacon in
-            Text(beacon.name)
+    }
+
+    private func loadIfNeeded() async {
+        if viewModel.state == .idle {
+            await viewModel.load(sessionStore: sessionStore)
         }
     }
 
@@ -271,6 +218,111 @@ struct AdministrationView: View {
     }
 }
 
+private struct AdministrationSheets: ViewModifier {
+    @Binding var userForm: AdminUserForm?
+    @Binding var passwordResetUser: AdminUser?
+    @Binding var roomForm: AdminRoomForm?
+    @Binding var beaconForm: AdminBeaconForm?
+    @ObservedObject var viewModel: AdministrationViewModel
+    @ObservedObject var sessionStore: SessionStore
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $userForm) { form in
+                AdminUserFormSheet(form: form, isSaving: viewModel.isSaving) { draft in
+                    await viewModel.save(form: draft, sessionStore: sessionStore)
+                }
+            }
+            .sheet(item: $passwordResetUser) { user in
+                PasswordResetSheet(user: user, isSaving: viewModel.isSaving) { password in
+                    await viewModel.resetPassword(user: user, newPassword: password, sessionStore: sessionStore)
+                }
+            }
+            .sheet(item: $roomForm) { form in
+                AdminRoomFormSheet(form: form, isSaving: viewModel.isSaving) { draft in
+                    await viewModel.saveRoom(form: draft, sessionStore: sessionStore)
+                }
+            }
+            .sheet(item: $beaconForm) { form in
+                AdminBeaconFormSheet(form: form, rooms: viewModel.rooms, isSaving: viewModel.isSaving) { draft in
+                    await viewModel.saveBeacon(form: draft, sessionStore: sessionStore)
+                }
+            }
+    }
+}
+
+private struct AdministrationAlerts: ViewModifier {
+    @Binding var deleteTarget: AdminUser?
+    @Binding var roomDeleteTarget: Room?
+    @Binding var beaconDeleteTarget: AdminBeacon?
+    @ObservedObject var viewModel: AdministrationViewModel
+    @ObservedObject var sessionStore: SessionStore
+
+    func body(content: Content) -> some View {
+        content
+            .alert(
+                "Deactivate User?",
+                isPresented: Binding(
+                    get: { deleteTarget != nil },
+                    set: { if !$0 { deleteTarget = nil } }
+                ),
+                presenting: deleteTarget
+            ) { user in
+                Button("Deactivate", role: .destructive) {
+                    Task {
+                        await viewModel.delete(user: user, sessionStore: sessionStore)
+                        deleteTarget = nil
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    deleteTarget = nil
+                }
+            } message: { user in
+                Text(user.displayName)
+            }
+            .alert(
+                "Delete Room?",
+                isPresented: Binding(
+                    get: { roomDeleteTarget != nil },
+                    set: { if !$0 { roomDeleteTarget = nil } }
+                ),
+                presenting: roomDeleteTarget
+            ) { room in
+                Button("Delete Room", role: .destructive) {
+                    Task {
+                        await viewModel.delete(room: room, sessionStore: sessionStore)
+                        roomDeleteTarget = nil
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    roomDeleteTarget = nil
+                }
+            } message: { room in
+                Text("This will delete \(room.name). Rooms with recorded presence cannot be deleted by the backend.")
+            }
+            .alert(
+                "Delete Beacon?",
+                isPresented: Binding(
+                    get: { beaconDeleteTarget != nil },
+                    set: { if !$0 { beaconDeleteTarget = nil } }
+                ),
+                presenting: beaconDeleteTarget
+            ) { beacon in
+                Button("Delete Beacon", role: .destructive) {
+                    Task {
+                        await viewModel.delete(beacon: beacon, sessionStore: sessionStore)
+                        beaconDeleteTarget = nil
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    beaconDeleteTarget = nil
+                }
+            } message: { beacon in
+                Text(beacon.name)
+            }
+    }
+}
+
 private struct AdministrationToolbar: View {
     @Binding var searchText: String
     @Binding var roleFilter: AdminUserRoleFilter
@@ -294,7 +346,7 @@ private struct AdministrationToolbar: View {
                         .padding(.horizontal, 13)
                         .frame(height: 30)
                         .background(AegisColors.teal)
-                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
@@ -360,7 +412,7 @@ private struct RoomManagementToolbar: View {
                     .padding(.horizontal, 13)
                     .frame(height: 30)
                     .background(AegisColors.teal)
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .buttonStyle(.plain)
         }
@@ -390,7 +442,7 @@ private struct BeaconManagementToolbar: View {
                         .padding(.horizontal, 13)
                         .frame(height: 30)
                         .background(AegisColors.teal)
-                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
@@ -516,7 +568,7 @@ private struct AdaptiveHorizontalTable<Content: View>: View {
             errorHeight = 0
         }
 
-        return 42 + bodyHeight + errorHeight
+        return 48 + bodyHeight + errorHeight
     }
 }
 
@@ -530,9 +582,15 @@ private struct AdminModePill: View {
             Text(title)
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(isSelected ? Color.white : AegisColors.teal)
-                .frame(width: 138, height: 30)
+                .padding(.horizontal, 16)
+                .frame(minWidth: 138)
+                .frame(height: 34)
                 .background(isSelected ? AegisColors.teal : Color.white.opacity(0.92))
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(isSelected ? Color.clear : AegisColors.panelBorder, lineWidth: 1)
+                }
         }
         .buttonStyle(.plain)
     }
@@ -583,7 +641,7 @@ private struct AdminRoomsTable: View {
                     }
                     .frame(height: 48)
                     .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                        Rectangle().fill(AegisColors.rowDivider).frame(height: 1)
                     }
                 }
             }
@@ -641,7 +699,7 @@ private struct AdminBeaconsTable: View {
                     }
                     .frame(height: 48)
                     .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                        Rectangle().fill(AegisColors.rowDivider).frame(height: 1)
                     }
                 }
             }
@@ -727,7 +785,7 @@ private struct AdminUsersTable: View {
                     }
                     .frame(height: 48)
                     .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                        Rectangle().fill(AegisColors.rowDivider).frame(height: 1)
                     }
                 }
             }
@@ -752,7 +810,7 @@ private struct IconActionButton: View {
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
                 .background(Color.white.opacity(0.82))
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -1020,150 +1078,5 @@ private struct AdminBeaconFormSheet: View {
             .padding(16)
         }
         .frame(width: 620, height: 340)
-    }
-}
-
-private struct FormTextField: View {
-    let title: String
-    @Binding var text: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(AegisColors.mutedText)
-            TextField(title, text: $text)
-                .textFieldStyle(.roundedBorder)
-        }
-    }
-}
-
-private struct SecureFormField: View {
-    let title: String
-    @Binding var text: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(AegisColors.mutedText)
-            SecureField(title, text: $text)
-                .textFieldStyle(.roundedBorder)
-        }
-    }
-}
-
-struct ReportsView: View {
-    @ObservedObject var viewModel: ReportsViewModel
-    @ObservedObject var sessionStore: SessionStore
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("Reports")
-                    .screenTitle()
-
-                WhitePanel {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Label("Generate Attendance Rollup", systemImage: "doc.text.fill")
-                            .font(.system(size: 16, weight: .bold))
-
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .top, spacing: 28) {
-                                reportFields
-                                reportResult
-                                Spacer()
-                            }
-
-                            VStack(alignment: .leading, spacing: 18) {
-                                reportFields
-                                reportResult
-                            }
-                        }
-
-                        HStack {
-                            Spacer()
-                            Button {
-                                Task { await viewModel.runRollup(sessionStore: sessionStore) }
-                            } label: {
-                                Label(viewModel.isRunning ? "Running..." : "Run Rollup", systemImage: "arrow.clockwise")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 16)
-                                    .frame(height: 34)
-                                    .background(AegisColors.teal)
-                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(viewModel.isRunning)
-                        }
-
-                        if case let .failed(message) = viewModel.state {
-                            ErrorBanner(message: message)
-                        }
-                    }
-                }
-                .frame(maxWidth: 760, alignment: .leading)
-
-                Spacer(minLength: 0)
-            }
-            .screenPadding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var reportFields: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            FormTextField(title: "Date", text: $viewModel.dateText)
-                .frame(width: 190)
-            FormTextField(title: "User ID", text: $viewModel.userIDText)
-                .frame(width: 190)
-        }
-    }
-
-    private var reportResult: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 14) {
-                    RollupMetric(title: "Processed", value: "\(viewModel.result?.processed ?? 0)")
-                    RollupMetric(title: "Leave Skipped", value: "\(viewModel.result?.skippedLeave ?? 0)")
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    RollupMetric(title: "Processed", value: "\(viewModel.result?.processed ?? 0)")
-                    RollupMetric(title: "Leave Skipped", value: "\(viewModel.result?.skippedLeave ?? 0)")
-                }
-            }
-
-            if let message = viewModel.message {
-                Text(message)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(message == "Rollup completed" ? AegisColors.activeGreen : Color.red)
-            }
-        }
-    }
-}
-
-private struct RollupMetric: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AegisColors.mutedText)
-            Text(value)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(.black)
-        }
-        .padding(16)
-        .frame(width: 150, alignment: .leading)
-        .background(Color.white.opacity(0.78))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(AegisColors.panelBorder, lineWidth: 1)
-        }
     }
 }
