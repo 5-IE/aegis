@@ -45,10 +45,14 @@ final class CryptoManager {
             }
         }
 
+        /// Bytes to persist in the Keychain. The two key types use different
+        /// encodings: Secure Enclave keys expose an opaque `dataRepresentation`
+        /// (an encrypted, enclave-bound reference), while software keys expose
+        /// the 32-byte private scalar via `rawRepresentation`.
         var storableRepresentation: Data {
             switch self {
             case .enclave(let k): return k.dataRepresentation
-            case .software(let k): return k.dataRepresentation
+            case .software(let k): return k.rawRepresentation
             }
         }
     }
@@ -58,11 +62,13 @@ final class CryptoManager {
     /// Load the persisted key, generating and storing one on first use.
     private func loadOrCreateKey() throws -> DeviceKey {
         if let data = readKeyData() {
+            // Reload with the initializer matching how the key was stored:
+            // enclave -> dataRepresentation, software -> rawRepresentation.
             if SecureEnclave.isAvailable,
                let key = try? SecureEnclave.P256.Signing.PrivateKey(dataRepresentation: data) {
                 return .enclave(key)
             }
-            if let key = try? P256.Signing.PrivateKey(dataRepresentation: data) {
+            if let key = try? P256.Signing.PrivateKey(rawRepresentation: data) {
                 return .software(key)
             }
             // Stored blob is unusable (e.g. moved between enclave/software) —
