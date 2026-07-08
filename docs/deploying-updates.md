@@ -12,6 +12,15 @@ ssh -p 484 freuch@10.64.58.125 sudo -n aegis-deploy
 
 Deploy a specific commit/branch instead of main: `... sudo -n aegis-deploy <commit-ish>`.
 
+The script's source of truth lives in the repo at [`Aegis-Backend/scripts/deploy/aegis-deploy`](../Aegis-Backend/scripts/deploy/aegis-deploy). If you change it, reinstall it on the VM:
+
+```bash
+scp -P 484 Aegis-Backend/scripts/deploy/aegis-deploy freuch@10.64.58.125:/tmp/aegis-deploy
+ssh -p 484 freuch@10.64.58.125 "sudo install -m 755 /tmp/aegis-deploy /usr/local/bin/aegis-deploy"
+```
+
+(The passwordless-sudo rule in `/etc/sudoers.d/aegis-deploy` covers only this exact path, so keep the install location.)
+
 Make it a local alias (`~/.zshrc`):
 
 ```bash
