@@ -145,7 +145,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"room_id\": 1,\n  \"position_x\": 4.2,\n  \"position_y\": 7.1,\n  \"battery_level\": 78\n}"
+              "raw": "{\n  \"room_id\": 1,\n  \"position_x\": 0.42,\n  \"position_y\": 0.71,\n  \"battery_level\": 78\n}"
             },
             "url": { "raw": "{{base_url}}/api/v1/presence", "host": ["{{base_url}}"], "path": ["api", "v1", "presence"] }
           }

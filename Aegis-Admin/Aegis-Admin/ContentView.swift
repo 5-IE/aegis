@@ -917,10 +917,11 @@ private struct RadarMapCard: View {
                     LegendItem(color: AegisColors.inactiveYellow, label: "Inactive")
                 }
                 RadarPlot(points: points, beacons: beacons)
+                    .clipped()
                     .overlay {
                         if case .loading = state {
                             ProgressView()
-                        } else if points.isEmpty {
+                        } else if points.isEmpty && beacons.isEmpty {
                             Text("No live map points.")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AegisColors.mutedText)
@@ -1024,6 +1025,8 @@ private struct BeaconMarker: View {
             .font(.system(size: 8, weight: .bold))
             .foregroundStyle(AegisColors.beaconBlue)
             .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: 72)
     }
 }
 
