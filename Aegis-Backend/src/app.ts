@@ -24,6 +24,16 @@ export function buildApp(): express.Express {
   const app = express();
   app.set('trust proxy', 1);
   app.use(requestLogger);
+
+  // CORS: allow browser-based tools (presence-sandbox.html, signing-tester)
+  app.use((_req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Timestamp, X-Signature');
+    if (_req.method === 'OPTIONS') { res.status(204).end(); return; }
+    next();
+  });
+
   app.use(express.json({
     limit: '64kb',
     verify: (req, _res, buf) => {
