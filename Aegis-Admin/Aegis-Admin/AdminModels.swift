@@ -159,6 +159,47 @@ enum SessionFilter: String, CaseIterable, Identifiable {
     var queryValue: String? { self == .all ? nil : rawValue }
 }
 
+enum AttendanceStatusFilter: String, CaseIterable, Identifiable, Hashable {
+    case onTime = "On-time"
+    case late = "Late"
+    case leave = "Leave"
+
+    var id: String { rawValue }
+
+    func matches(_ status: String) -> Bool {
+        let value = status.lowercased()
+        switch self {
+        case .onTime:
+            return value.contains("on time") || value.contains("checked in") || value.contains("early")
+        case .late:
+            return value.contains("late") || value.contains("running")
+        case .leave:
+            return value.contains("leave") || value.contains("checked out")
+        }
+    }
+}
+
+enum OccupantStatusFilter: String, CaseIterable, Identifiable, Hashable {
+    case active = "Active"
+    case inactive = "Inactive"
+
+    var id: String { rawValue }
+
+    func matches(_ status: String) -> Bool {
+        let value = status.lowercased()
+        switch self {
+        case .active:
+            return value.contains("on time") || value.contains("checked in") ||
+                (value.contains("active") && !value.contains("inactive")) ||
+                value.contains("early") || value.contains("late") ||
+                value.contains("running")
+        case .inactive:
+            return value.contains("leave") || value.contains("clocked out") ||
+                value.contains("inactive")
+        }
+    }
+}
+
 enum AdminUserRole: String, CaseIterable, Identifiable {
     case learner
     case admin
@@ -237,7 +278,7 @@ struct AdminRoomForm: Identifiable, Equatable {
     var id: UUID { formID }
     var isEditing: Bool { roomID != nil }
     var title: String { isEditing ? "Edit Room" : "Add New Room" }
-    var submitTitle: String { isEditing ? "Save Room" : "Create Room" }
+    var submitTitle: String { isEditing ? "Save Room" : "Create New Room" }
     var canSubmit: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     init() {}
@@ -324,7 +365,7 @@ struct AdminUserForm: Identifiable, Equatable {
     var password = ""
     var email = ""
     var role: AdminUserRole = .learner
-    var session = "AM"
+    var session = ""
     var firstName = ""
     var lastName = ""
 
@@ -332,11 +373,11 @@ struct AdminUserForm: Identifiable, Equatable {
     var isEditing: Bool { userID != nil }
 
     var title: String {
-        isEditing ? "Edit User" : "Add New User"
+        isEditing ? "Edit Learner" : "Add New Learner"
     }
 
     var submitTitle: String {
-        isEditing ? "Save User" : "Create User"
+        isEditing ? "Edit Learner Profile" : "Create Learner Profile"
     }
 
     var canSubmit: Bool {

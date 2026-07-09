@@ -40,6 +40,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var state: LoadState = .idle
     @Published var searchText = ""
     @Published var sessionFilter: SessionFilter = .all
+    @Published var statusFilters: Set<AttendanceStatusFilter> = []
 
     var formattedDate: String {
         let formatter = DateFormatter()
@@ -59,7 +60,7 @@ final class DashboardViewModel: ObservableObject {
             async let summary = sessionStore.dashboardSummary()
             async let rows = sessionStore.overview(search: searchText, sessionFilter: sessionFilter)
             self.summary = try await summary
-            self.overviewRows = try await rows
+            self.overviewRows = applyStatusFilters(to: try await rows)
             state = overviewRows.isEmpty ? .empty : .loaded
         } catch {
             state = .failed(readableMessage(for: error))
@@ -68,10 +69,18 @@ final class DashboardViewModel: ObservableObject {
 
     func reloadOverview(sessionStore: SessionStore) async {
         do {
-            overviewRows = try await sessionStore.overview(search: searchText, sessionFilter: sessionFilter)
+            let rows = try await sessionStore.overview(search: searchText, sessionFilter: sessionFilter)
+            overviewRows = applyStatusFilters(to: rows)
             state = overviewRows.isEmpty ? .empty : .loaded
         } catch {
             state = .failed(readableMessage(for: error))
+        }
+    }
+
+    private func applyStatusFilters(to rows: [AttendanceOverviewRow]) -> [AttendanceOverviewRow] {
+        guard !statusFilters.isEmpty else { return rows }
+        return rows.filter { row in
+            statusFilters.contains { $0.matches(row.status) }
         }
     }
 }
@@ -85,6 +94,8 @@ final class LiveRadarViewModel: ObservableObject {
     @Published var metrics = RoomMetrics.empty
     @Published var state: LoadState = .idle
     @Published var occupantsSearchText = ""
+    @Published var occupantsSessionFilter: SessionFilter = .all
+    @Published var occupantsStatusFilters: Set<OccupantStatusFilter> = [.active]
 
     private var pollTask: Task<Void, Never>?
 
@@ -94,8 +105,14 @@ final class LiveRadarViewModel: ObservableObject {
 
     var filteredOccupants: [Occupant] {
         let trimmed = occupantsSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return occupants }
-        return occupants.filter { $0.learner.localizedCaseInsensitiveContains(trimmed) }
+        return occupants.filter { occupant in
+            let matchesName = trimmed.isEmpty || occupant.learner.localizedCaseInsensitiveContains(trimmed)
+            let matchesSession = occupantsSessionFilter == .all ||
+                occupant.session.caseInsensitiveCompare(occupantsSessionFilter.rawValue) == .orderedSame
+            let matchesStatus = occupantsStatusFilters.isEmpty ||
+                occupantsStatusFilters.contains { $0.matches(occupant.status) }
+            return matchesName && matchesSession && matchesStatus
+        }
     }
 
     func load(sessionStore: SessionStore) async {
@@ -207,7 +224,7 @@ final class AdministrationViewModel: ObservableObject {
     @Published var page = 1
     @Published var perPage = 20
     @Published var searchText = ""
-    @Published var roleFilter: AdminUserRoleFilter = .all
+    @Published var roleFilter: AdminUserRoleFilter = .learner
     @Published var sessionFilter: SessionFilter = .all
     @Published var includeInactive = false
     @Published var state: LoadState = .idle
@@ -478,7 +495,7 @@ final class AdministrationViewModel: ObservableObject {
     }
 
     func beaconStatus(for room: Room) -> String {
-        beaconCount(for: room) > 0 ? "Assigned" : "No beacons"
+        beaconCount(for: room) > 0 ? "Active" : "Inactive"
     }
 
     private func fetch(sessionStore: SessionStore) async {

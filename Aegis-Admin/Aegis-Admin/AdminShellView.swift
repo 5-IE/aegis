@@ -14,6 +14,7 @@ struct AdminShellView: View {
         HStack(spacing: 0) {
             SidebarView(
                 selection: $selectedSection,
+                administrationMode: $administrationViewModel.selectedMode,
                 user: user,
                 signOut: { Task { await sessionStore.signOut() } }
             )
@@ -24,6 +25,9 @@ struct AdminShellView: View {
                 activeScreen
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onChange(of: administrationViewModel.selectedMode) { _, mode in
+            administrationViewModel.selectMode(mode, sessionStore: sessionStore)
         }
     }
 
@@ -50,14 +54,17 @@ struct AdminShellView: View {
 
 private struct SidebarView: View {
     @Binding var selection: AdminSection
+    @Binding var administrationMode: AdministrationMode
     let user: UserSession
     let signOut: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 11) {
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(.system(size: 34, weight: .semibold))
+                Image("aegis mac")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 34, height: 34)
                 Text("Aegis")
                     .font(.system(size: 36, weight: .bold))
             }
@@ -67,8 +74,14 @@ private struct SidebarView: View {
 
             VStack(alignment: .leading, spacing: 20) {
                 ForEach(AdminSection.allCases) { section in
-                    SidebarItem(section: section, isSelected: section == selection) {
-                        selection = section
+                    VStack(spacing: 10) {
+                        SidebarItem(section: section, isSelected: section == selection) {
+                            selection = section
+                        }
+
+                        if section == .administration && selection == .administration {
+                            AdministrationSubmenu(selection: $administrationMode)
+                        }
                     }
                 }
             }
@@ -116,6 +129,67 @@ private struct SidebarView: View {
     }
 }
 
+private struct AdministrationSubmenu: View {
+    @Binding var selection: AdministrationMode
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(AdministrationMode.allCases.enumerated()), id: \.element.id) { index, mode in
+                HStack(spacing: 10) {
+                    ZStack {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.45))
+                            .frame(width: 1, height: 36)
+                            .opacity(index == AdministrationMode.allCases.count - 1 ? 0 : 1)
+                            .offset(y: 18)
+                        Circle()
+                            .fill(selection == mode ? AegisColors.teal : Color.gray.opacity(0.70))
+                            .frame(width: 7, height: 7)
+                    }
+                    .frame(width: 14, height: 36)
+
+                    Button {
+                        selection = mode
+                    } label: {
+                        Text(mode.rawValue)
+                            .font(AegisTypography.caption)
+                            .foregroundStyle(selection == mode ? .white : AegisColors.mutedText)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .frame(height: 32)
+                            .background {
+                                if selection == mode {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(AegisColors.secondaryTeal)
+                                        .overlay {
+                                            HStack {
+                                                Ellipse()
+                                                    .fill(Color.white.opacity(0.28))
+                                                    .frame(width: 34, height: 46)
+                                                    .blur(radius: 12)
+                                                    .offset(x: -18)
+                                                Spacer()
+                                                Ellipse()
+                                                    .fill(Color.white.opacity(0.24))
+                                                    .frame(width: 34, height: 46)
+                                                    .blur(radius: 12)
+                                                    .offset(x: 18)
+                                            }
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        }
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 8)
+    }
+}
+
 private struct SidebarItem: View {
     let section: AdminSection
     let isSelected: Bool
@@ -123,32 +197,24 @@ private struct SidebarItem: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 13) {
+            HStack(spacing: 10) {
                 Image(systemName: section.symbolName)
                     .font(.system(size: 20, weight: .medium))
-                    .frame(width: 28)
+                    .frame(width: 24)
 
                 Text(section.rawValue)
                     .font(AegisTypography.b1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
                 Spacer(minLength: 0)
             }
             .foregroundStyle(isSelected ? Color.white : AegisColors.mutedText)
             .frame(height: 52)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 12)
             .background {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(AegisColors.teal)
-                        .overlay(alignment: .trailing) {
-                            RadialGradient(
-                                colors: [Color.white.opacity(0.38), .clear],
-                                center: .trailing,
-                                startRadius: 0,
-                                endRadius: 38
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        }
+                    AegisButtonBackground()
                 }
             }
         }

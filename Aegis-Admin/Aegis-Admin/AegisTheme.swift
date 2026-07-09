@@ -3,7 +3,8 @@ import SwiftUI
 enum AegisColors {
     static let ink = Color(red: 0.04, green: 0.05, blue: 0.06)
     static let mutedText = Color(red: 0.42, green: 0.45, blue: 0.46)
-    static let teal = Color(red: 0.30, green: 0.42, blue: 0.45)
+    static let teal = Color(red: 73 / 255, green: 99 / 255, blue: 107 / 255)
+    static let secondaryTeal = Color(red: 124 / 255, green: 161 / 255, blue: 172 / 255)
     static let tealDark = Color(red: 0.24, green: 0.36, blue: 0.39)
     static let tableHeader = Color(red: 0.70, green: 0.82, blue: 0.85)
     static let dashboardBackground = Color(red: 0.985, green: 0.985, blue: 0.985)
@@ -46,12 +47,13 @@ enum AegisColors {
 
 
 enum AegisTypography {
-    static let h1 = Font.system(size: 36, weight: .bold)
-    static let h2 = Font.system(size: 22, weight: .semibold)
-    static let h3 = Font.system(size: 20, weight: .semibold)
-    static let b1 = Font.system(size: 20, weight: .medium)
-    static let b2 = Font.system(size: 16, weight: .regular)
-    static let caption = Font.system(size: 14, weight: .medium)
+    static let h1 = Font.system(size: 30, weight: .bold)
+    static let h2 = Font.system(size: 18, weight: .semibold)
+    static let h3 = Font.system(size: 16, weight: .semibold)
+    static let b1 = Font.system(size: 16, weight: .medium)
+    static let b2 = Font.system(size: 14, weight: .regular)
+    static let tableHeader = Font.system(size: 16, weight: .medium)
+    static let caption = Font.system(size: 12, weight: .medium)
 }
 
 enum AegisSpacing {
@@ -87,8 +89,47 @@ struct AegisPrimaryButtonStyle: ButtonStyle {
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .frame(height: 34)
-            .background(AegisColors.teal.opacity(configuration.isPressed ? 0.82 : 1))
+            .background {
+                AegisButtonBackground(isPressed: configuration.isPressed)
+            }
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+struct AegisSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(AegisTypography.b2)
+            .foregroundStyle(.black)
+            .padding(.horizontal, 16)
+            .frame(height: 34)
+            .background(Color.gray.opacity(configuration.isPressed ? 0.22 : 0.14))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+struct AegisButtonBackground: View {
+    var isPressed = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(AegisColors.teal.opacity(isPressed ? 0.82 : 1))
+            .overlay {
+                HStack {
+                    Ellipse()
+                        .fill(Color.white.opacity(0.20))
+                        .frame(width: 48, height: 72)
+                        .blur(radius: 15)
+                        .offset(x: -25)
+                    Spacer()
+                    Ellipse()
+                        .fill(Color.white.opacity(0.26))
+                        .frame(width: 48, height: 72)
+                        .blur(radius: 15)
+                        .offset(x: 25)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
     }
 }
 
@@ -129,19 +170,21 @@ struct SearchField: View {
     let placeholder: String
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(Color.gray)
+                .font(AegisTypography.caption)
+                .foregroundStyle(AegisColors.mutedText)
+
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 16, weight: .regular))
+                .font(AegisTypography.b2)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 9)
         .frame(height: 30)
         .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .stroke(AegisColors.panelBorder, lineWidth: 1)
         }
     }
@@ -172,29 +215,27 @@ struct MetricCard: View {
     let value: String
 
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 14) {
             ZStack {
                 Circle()
                     .fill(iconBackground.opacity(0.90))
                 Image(systemName: icon)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(iconColor)
             }
-            .frame(width: 66, height: 66)
+            .frame(width: 58, height: 58)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.black)
+                    .aegisH2()
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .minimumScaleFactor(0.65)
                 Text(value)
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.black)
+                    .aegisH1()
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 23)
+        .padding(.horizontal, 16)
         .frame(height: 104)
         .background(AegisColors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -225,18 +266,18 @@ struct TableHeader: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
+            ForEach(Array(columns.enumerated()), id: \.offset) { index, column in
                 Text(column.0)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(AegisTypography.tableHeader)
                     .foregroundStyle(.black)
+                    .padding(.horizontal, 16)
                     .frame(
                         minWidth: column.1 == .infinity ? 0 : column.1,
                         maxWidth: column.1 == .infinity ? .infinity : column.1,
-                        alignment: .leading
+                        alignment: index == 0 ? .leading : .center
                     )
             }
         }
-        .padding(.horizontal, 16)
         .frame(height: 52)
         .background(AegisColors.tableHeader)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -352,12 +393,12 @@ extension View {
         self
             .font(AegisTypography.b2)
             .lineLimit(1)
+            .padding(.horizontal, 16)
             .frame(
                 minWidth: width ?? 0,
                 maxWidth: maxWidth ?? width ?? .infinity,
                 alignment: alignment
             )
-            .padding(.horizontal, 16)
     }
 }
 

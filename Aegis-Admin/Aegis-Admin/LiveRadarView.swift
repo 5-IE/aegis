@@ -3,12 +3,13 @@ import SwiftUI
 struct LiveRadarView: View {
     @ObservedObject var viewModel: LiveRadarViewModel
     @ObservedObject var sessionStore: SessionStore
+    @State private var isShowingFilters = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Live Radar")
-                    .screenTitle()
+                    .aegisH1()
 
                 roomTabs
 
@@ -37,6 +38,9 @@ struct LiveRadarView: View {
         }
         .onDisappear {
             viewModel.stopPolling()
+        }
+        .sheet(isPresented: $isShowingFilters) {
+            OccupantsFilterSheet(viewModel: viewModel)
         }
     }
 
@@ -67,7 +71,7 @@ struct LiveRadarView: View {
                 .frame(minHeight: 280, idealHeight: 340, maxHeight: 380)
 
             WhitePanel {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
                     occupantsHeader
                     OccupantsTable(rows: viewModel.filteredOccupants, state: viewModel.state)
                         .frame(minHeight: 150, maxHeight: 260)
@@ -93,7 +97,7 @@ struct LiveRadarView: View {
 
     private var occupantsTitle: some View {
         Label("Current Occupants", systemImage: "person.2.fill")
-            .font(.system(size: 16, weight: .bold))
+            .aegisH2()
     }
 
     private var occupantsControls: some View {
@@ -102,9 +106,12 @@ struct LiveRadarView: View {
                 .frame(width: 210)
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(AegisColors.teal)
+                .foregroundStyle(.black)
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(Color.white))
+                .onTapGesture {
+                    isShowingFilters = true
+                }
         }
     }
 
@@ -136,7 +143,7 @@ struct LiveRadarView: View {
             icon: "thermometer.medium",
             iconColor: Color(red: 0.93, green: 0.42, blue: 0.49),
             iconBackground: Color(red: 1.0, green: 0.68, blue: 0.72),
-            title: "Room Temperature",
+            title: "Temperature",
             value: String(format: "%.1f\u{00B0}C", viewModel.metrics.temperature).replacingOccurrences(of: ".", with: ",")
         )
     }
@@ -176,9 +183,155 @@ private struct RoomTab: View {
                 .frame(minWidth: 104)
                 .frame(height: 34)
                 .background {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(isSelected ? AegisColors.teal : Color.white.opacity(0.92))
+                    if isSelected {
+                        AegisButtonBackground()
+                    } else {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.white.opacity(0.92))
+                    }
                 }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct OccupantsFilterSheet: View {
+    @ObservedObject var viewModel: LiveRadarViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var session: SessionFilter
+    @State private var statuses: Set<OccupantStatusFilter>
+
+    init(viewModel: LiveRadarViewModel) {
+        self.viewModel = viewModel
+        _session = State(initialValue: viewModel.occupantsSessionFilter)
+        _statuses = State(initialValue: viewModel.occupantsStatusFilters)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Filters")
+                    .font(.system(size: 28, weight: .bold))
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(.black)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 38)
+            .frame(height: 88)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 30) {
+                filterSection(title: "Session") {
+                    HStack(spacing: 64) {
+                        ForEach(SessionFilter.allCases) { item in
+                            filterOption(
+                                title: item.rawValue,
+                                isSelected: session == item
+                            ) {
+                                session = item
+                            }
+                            .frame(width: 112, alignment: .leading)
+                        }
+                    }
+                }
+
+                filterSection(title: "Status") {
+                    HStack(spacing: 64) {
+                        ForEach(OccupantStatusFilter.allCases) { item in
+                            filterOption(
+                                title: item.rawValue,
+                                isSelected: statuses.contains(item)
+                            ) {
+                                if statuses.contains(item) {
+                                    statuses.remove(item)
+                                } else {
+                                    statuses.insert(item)
+                                }
+                            }
+                            .frame(width: 112, alignment: .leading)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                HStack {
+                    Button("Remove Filter") {
+                        session = .all
+                        statuses = []
+                        viewModel.occupantsSessionFilter = .all
+                        viewModel.occupantsStatusFilters = []
+                        dismiss()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 16))
+                    .foregroundStyle(AegisColors.mutedText)
+                    .padding(.horizontal, 14)
+                    .frame(height: 38)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.75), lineWidth: 1)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        viewModel.occupantsSessionFilter = session
+                        viewModel.occupantsStatusFilters = statuses
+                        dismiss()
+                    } label: {
+                        Text("Apply Filters")
+                            .font(AegisTypography.b2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 205, height: 38)
+                            .background {
+                                AegisButtonBackground()
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 38)
+            .padding(.top, 24)
+            .padding(.bottom, 28)
+        }
+        .frame(width: 760, height: 400)
+        .background(Color.white)
+    }
+
+    private func filterSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text(title)
+                .font(.system(size: 20, weight: .medium))
+            content()
+        }
+    }
+
+    private func filterOption(
+        title: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(isSelected ? Color.blue : Color.gray.opacity(0.28))
+                Text(title)
+                    .font(.system(size: 18))
+                    .foregroundStyle(.black)
+                    .lineLimit(1)
+            }
         }
         .buttonStyle(.plain)
     }
@@ -193,7 +346,7 @@ private struct RadarMapCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Label("Live Trilateration Map", systemImage: "map")
-                        .font(.system(size: 16, weight: .bold))
+                        .aegisH2()
                     Spacer()
                     LegendItem(color: AegisColors.activeGreen, label: "Active")
                     LegendItem(color: AegisColors.inactiveYellow, label: "Inactive")
@@ -294,10 +447,10 @@ private struct OccupantsTable: View {
         VStack(spacing: 0) {
             TableHeader(columns: [
                 ("Learner", .infinity),
-                ("Session", 100),
-                ("Duration", 130),
-                ("Status", 110),
-                ("Last Update", 110)
+                ("Session", .infinity),
+                ("Duration", .infinity),
+                ("Status", .infinity),
+                ("Last Update", .infinity)
             ])
 
             if case .loading = state {
@@ -310,12 +463,12 @@ private struct OccupantsTable: View {
                         ForEach(rows) { row in
                             HStack(spacing: 0) {
                                 Text(row.learner).tableCell(maxWidth: .infinity, alignment: .leading)
-                                Text(row.session).tableCell(width: 100)
-                                Text(row.formattedDuration).tableCell(width: 130)
+                                Text(row.session).tableCell(maxWidth: .infinity)
+                                Text(row.formattedDuration).tableCell(maxWidth: .infinity)
                                 Text(row.status.titleCasedStatus)
                                     .foregroundStyle(statusColor(row.status))
-                                    .tableCell(width: 110)
-                                Text("Now").tableCell(width: 110)
+                                    .tableCell(maxWidth: .infinity)
+                                Text("Now").tableCell(maxWidth: .infinity)
                             }
                             .frame(height: 46)
                             .overlay(alignment: .bottom) {

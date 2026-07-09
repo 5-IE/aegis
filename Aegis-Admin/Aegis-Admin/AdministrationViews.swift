@@ -21,7 +21,9 @@ struct AdministrationView: View {
             .modifier(AdministrationSheets(
                 userForm: $userForm,
                 passwordResetUser: $passwordResetUser,
+                deleteTarget: $deleteTarget,
                 roomForm: $roomForm,
+                roomDeleteTarget: $roomDeleteTarget,
                 beaconForm: $beaconForm,
                 viewModel: viewModel,
                 sessionStore: sessionStore
@@ -40,8 +42,6 @@ struct AdministrationView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Administration")
                     .screenTitle()
-
-                modeTabs
 
                 activeAdministrationPanel
 
@@ -90,9 +90,6 @@ struct AdministrationView: View {
             VStack(alignment: .leading, spacing: 16) {
                 AdministrationToolbar(
                     searchText: $viewModel.searchText,
-                    roleFilter: $viewModel.roleFilter,
-                    sessionFilter: $viewModel.sessionFilter,
-                    includeInactive: $viewModel.includeInactive,
                     applyFilters: {
                         Task { await viewModel.applyFilters(sessionStore: sessionStore) }
                     },
@@ -102,20 +99,14 @@ struct AdministrationView: View {
                 )
 
                 AdaptiveHorizontalTable(
-                    minWidth: 900,
+                    minWidth: 760,
                     rowCount: viewModel.users.count,
                     state: viewModel.state
                 ) {
                     AdminUsersTable(
                         rows: viewModel.users,
                         state: viewModel.state,
-                        currentAdminID: currentAdminID,
-                        edit: { userForm = AdminUserForm(user: $0) },
-                        resetPassword: { passwordResetUser = $0 },
-                        delete: { deleteTarget = $0 },
-                        reactivate: { user in
-                            Task { await viewModel.reactivate(user: user, sessionStore: sessionStore) }
-                        }
+                        edit: { userForm = AdminUserForm(user: $0) }
                     )
                 }
 
@@ -221,7 +212,9 @@ struct AdministrationView: View {
 private struct AdministrationSheets: ViewModifier {
     @Binding var userForm: AdminUserForm?
     @Binding var passwordResetUser: AdminUser?
+    @Binding var deleteTarget: AdminUser?
     @Binding var roomForm: AdminRoomForm?
+    @Binding var roomDeleteTarget: Room?
     @Binding var beaconForm: AdminBeaconForm?
     @ObservedObject var viewModel: AdministrationViewModel
     @ObservedObject var sessionStore: SessionStore
@@ -229,9 +222,16 @@ private struct AdministrationSheets: ViewModifier {
     func body(content: Content) -> some View {
         content
             .sheet(item: $userForm) { form in
-                AdminUserFormSheet(form: form, isSaving: viewModel.isSaving) { draft in
-                    await viewModel.save(form: draft, sessionStore: sessionStore)
-                }
+                AdminUserFormSheet(
+                    form: form,
+                    isSaving: viewModel.isSaving,
+                    onSave: { draft in
+                        await viewModel.save(form: draft, sessionStore: sessionStore)
+                    },
+                    onDelete: {
+                        deleteTarget = viewModel.users.first { $0.id == form.userID }
+                    }
+                )
             }
             .sheet(item: $passwordResetUser) { user in
                 PasswordResetSheet(user: user, isSaving: viewModel.isSaving) { password in
@@ -239,9 +239,17 @@ private struct AdministrationSheets: ViewModifier {
                 }
             }
             .sheet(item: $roomForm) { form in
-                AdminRoomFormSheet(form: form, isSaving: viewModel.isSaving) { draft in
-                    await viewModel.saveRoom(form: draft, sessionStore: sessionStore)
-                }
+                AdminRoomFormSheet(
+                    form: form,
+                    beacons: viewModel.beacons,
+                    isSaving: viewModel.isSaving,
+                    onSave: { draft in
+                        await viewModel.saveRoom(form: draft, sessionStore: sessionStore)
+                    },
+                    onDelete: {
+                        roomDeleteTarget = viewModel.rooms.first { $0.id == form.roomID }
+                    }
+                )
             }
             .sheet(item: $beaconForm) { form in
                 AdminBeaconFormSheet(form: form, rooms: viewModel.rooms, isSaving: viewModel.isSaving) { draft in
@@ -261,14 +269,14 @@ private struct AdministrationAlerts: ViewModifier {
     func body(content: Content) -> some View {
         content
             .alert(
-                "Deactivate User?",
+                "Delete Profile?",
                 isPresented: Binding(
                     get: { deleteTarget != nil },
                     set: { if !$0 { deleteTarget = nil } }
                 ),
                 presenting: deleteTarget
             ) { user in
-                Button("Deactivate", role: .destructive) {
+                Button("Delete Profile", role: .destructive) {
                     Task {
                         await viewModel.delete(user: user, sessionStore: sessionStore)
                         deleteTarget = nil
@@ -325,72 +333,33 @@ private struct AdministrationAlerts: ViewModifier {
 
 private struct AdministrationToolbar: View {
     @Binding var searchText: String
-    @Binding var roleFilter: AdminUserRoleFilter
-    @Binding var sessionFilter: SessionFilter
-    @Binding var includeInactive: Bool
     let applyFilters: () -> Void
     let addUser: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Label("User Management", systemImage: "person.3.fill")
-                    .font(.system(size: 16, weight: .bold))
+        HStack(spacing: 16) {
+            Label("User Management", systemImage: "person.3.fill")
+                .aegisH2()
 
-                Spacer()
+            Spacer()
 
-                Button(action: addUser) {
-                    Label("Add New User", systemImage: "plus")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 13)
-                        .frame(height: 30)
-                        .background(AegisColors.teal)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            SearchField(text: $searchText, placeholder: "Search by Name...")
+                .frame(width: 265)
+                .onSubmit {
+                    applyFilters()
                 }
-                .buttonStyle(.plain)
+
+            Button(action: addUser) {
+                Label("Add New Learner", systemImage: "plus")
+                    .font(AegisTypography.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .frame(height: 34)
+                    .background {
+                        AegisButtonBackground()
+                    }
             }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    SearchField(text: $searchText, placeholder: "Search by Name...")
-                        .frame(width: 220)
-                        .onSubmit {
-                            applyFilters()
-                        }
-
-                    Picker("Role", selection: $roleFilter) {
-                        ForEach(AdminUserRoleFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(filter)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 120)
-
-                    Picker("Session", selection: $sessionFilter) {
-                        ForEach(SessionFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(filter)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 90)
-
-                    Toggle("Inactive", isOn: $includeInactive)
-                        .toggleStyle(.checkbox)
-                        .font(.system(size: 12, weight: .semibold))
-
-                    Button(action: applyFilters) {
-                        Image(systemName: "line.3.horizontal.decrease")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(AegisColors.teal)
-                            .frame(width: 30, height: 30)
-                            .background(Circle().fill(Color.white))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Apply filters")
-                }
-                .padding(.bottom, 1)
-            }
+            .buttonStyle(.plain)
         }
     }
 }
@@ -400,19 +369,20 @@ private struct RoomManagementToolbar: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Label("Room Management", systemImage: "building.2.fill")
-                .font(.system(size: 16, weight: .bold))
+            Label("Room Management", systemImage: "house.fill")
+                .aegisH2()
 
             Spacer()
 
             Button(action: addRoom) {
                 Label("Add New Room", systemImage: "plus")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AegisTypography.caption.weight(.bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 13)
-                    .frame(height: 30)
-                    .background(AegisColors.teal)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .frame(height: 34)
+                    .background {
+                        AegisButtonBackground()
+                    }
             }
             .buttonStyle(.plain)
         }
@@ -608,9 +578,10 @@ private struct AdminRoomsTable: View {
         VStack(spacing: 0) {
             TableHeader(columns: [
                 ("Room Name", .infinity),
-                ("Beacon Count", 132),
-                ("Beacon Status", 150),
-                ("Actions", 110)
+                ("Location", 180),
+                ("Beacon Count", 170),
+                ("Beacon Status", 170),
+                ("Actions", 120)
             ])
 
             if case .loading = state {
@@ -621,23 +592,19 @@ private struct AdminRoomsTable: View {
                 ForEach(rows) { room in
                     HStack(spacing: 0) {
                         Text(room.name).tableCell(maxWidth: .infinity, alignment: .leading)
-                        Text("\(beaconCount(room))").tableCell(width: 132)
+                        Text("—").tableCell(width: 180, alignment: .leading)
+                        Text("\(beaconCount(room)) Sensors").tableCell(width: 170)
                         Text(beaconStatus(room))
                             .foregroundStyle(beaconCount(room) > 0 ? AegisColors.activeGreen : AegisColors.mutedText)
-                            .tableCell(width: 150)
+                            .tableCell(width: 170)
 
-                        HStack(spacing: 8) {
+                        HStack {
                             IconActionButton(symbol: "pencil", tint: Color.blue) {
                                 edit(room)
                             }
                             .help("Edit room")
-
-                            IconActionButton(symbol: "trash", tint: Color.red) {
-                                delete(room)
-                            }
-                            .help("Delete room")
                         }
-                        .frame(width: 110)
+                        .frame(width: 120)
                     }
                     .frame(height: 48)
                     .overlay(alignment: .bottom) {
@@ -715,21 +682,16 @@ private struct AdminBeaconsTable: View {
 private struct AdminUsersTable: View {
     let rows: [AdminUser]
     let state: LoadState
-    let currentAdminID: Int
     let edit: (AdminUser) -> Void
-    let resetPassword: (AdminUser) -> Void
-    let delete: (AdminUser) -> Void
-    let reactivate: (AdminUser) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             TableHeader(columns: [
-                ("Name", .infinity),
-                ("Role", 92),
-                ("Session", 92),
-                ("Email", 220),
-                ("Status", 92),
-                ("Actions", 142)
+                ("Learner", .infinity),
+                ("Session", 130),
+                ("E-mail", 250),
+                ("ID", 130),
+                ("Actions", 110)
             ])
 
             if case .loading = state {
@@ -739,49 +701,25 @@ private struct AdminUsersTable: View {
             } else {
                 ForEach(rows) { user in
                     HStack(spacing: 0) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(user.displayName)
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("@\(user.username)")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(AegisColors.mutedText)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 13)
+                        Text(user.displayName)
+                            .tableCell(maxWidth: .infinity, alignment: .leading)
+                        Text(user.sessionDisplay).tableCell(width: 130)
+                        Text(user.email).tableCell(width: 250)
+                        Text(String(format: "%04d", user.id)).tableCell(width: 130)
 
-                        Text(user.role.title).tableCell(width: 92)
-                        Text(user.sessionDisplay).tableCell(width: 92)
-                        Text(user.email).tableCell(width: 220, alignment: .leading)
-                        Text(user.statusText)
-                            .foregroundStyle(user.isActive ? AegisColors.activeGreen : AegisColors.mutedText)
-                            .tableCell(width: 92)
-
-                        HStack(spacing: 8) {
-                            IconActionButton(symbol: "pencil", tint: Color.blue) {
+                        HStack {
+                            Button {
                                 edit(user)
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(AegisTypography.b2)
+                                    .foregroundStyle(Color.blue)
+                                    .frame(width: 30, height: 30)
                             }
-                            .help("Edit user")
-
-                            IconActionButton(symbol: "key", tint: AegisColors.teal) {
-                                resetPassword(user)
-                            }
-                            .help("Reset password")
-
-                            if user.isActive {
-                                IconActionButton(symbol: "trash", tint: Color.red) {
-                                    delete(user)
-                                }
-                                .disabled(user.id == currentAdminID)
-                                .opacity(user.id == currentAdminID ? 0.35 : 1)
-                                .help(user.id == currentAdminID ? "Cannot deactivate yourself" : "Deactivate user")
-                            } else {
-                                IconActionButton(symbol: "arrow.counterclockwise", tint: AegisColors.activeGreen) {
-                                    reactivate(user)
-                                }
-                                .help("Reactivate user")
-                            }
+                            .buttonStyle(.plain)
+                            .help("Edit learner profile")
                         }
-                        .frame(width: 142)
+                        .frame(width: 110)
                     }
                     .frame(height: 48)
                     .overlay(alignment: .bottom) {
@@ -819,39 +757,86 @@ private struct IconActionButton: View {
 private struct AdminUserFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AdminUserForm
+    @State private var isShowingSessionOptions = false
     let isSaving: Bool
     let onSave: (AdminUserForm) async -> Bool
+    let onDelete: () -> Void
 
-    init(form: AdminUserForm, isSaving: Bool, onSave: @escaping (AdminUserForm) async -> Bool) {
+    init(
+        form: AdminUserForm,
+        isSaving: Bool,
+        onSave: @escaping (AdminUserForm) async -> Bool,
+        onDelete: @escaping () -> Void
+    ) {
         self._draft = State(initialValue: form)
         self.isSaving = isSaving
         self.onSave = onSave
+        self.onDelete = onDelete
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(draft.title)
-                .font(.system(size: 18, weight: .bold))
+            HStack {
+                Text(draft.title)
+                    .aegisH2()
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(AegisTypography.h2)
+                        .foregroundStyle(.black)
+                }
+                .buttonStyle(.plain)
+            }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 18)
 
             Divider()
 
             VStack(alignment: .leading, spacing: 18) {
-                Text("User Details")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AegisColors.teal)
+                Text("Learner Details")
+                    .font(AegisTypography.b2.weight(.semibold))
 
                 HStack(spacing: 14) {
-                    FormTextField(title: "Username", text: $draft.username)
+                    FormTextField(title: "Learner ID", text: $draft.username)
                         .disabled(draft.isEditing)
-                    Picker("Role", selection: $draft.role) {
-                        ForEach(AdminUserRole.allCases) { role in
-                            Text(role.title).tag(role)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Session")
+                            .font(AegisTypography.caption)
+                            .foregroundStyle(AegisColors.mutedText)
+                        Button {
+                            isShowingSessionOptions.toggle()
+                        } label: {
+                            HStack {
+                                Text(draft.session.isEmpty ? "Select Session" : draft.session)
+                                    .foregroundStyle(draft.session.isEmpty ? AegisColors.mutedText : .black)
+                                Spacer()
+                                Image(systemName: "chevron.down")
+                                    .foregroundStyle(AegisColors.mutedText)
+                            }
+                            .font(AegisTypography.b2)
+                            .padding(.horizontal, 12)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 32)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.gray.opacity(0.55), lineWidth: 1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $isShowingSessionOptions, arrowEdge: .bottom) {
+                            VStack(spacing: 0) {
+                                sessionOption("AM")
+                                Divider()
+                                sessionOption("PM")
+                            }
+                            .padding(6)
+                            .frame(width: 250)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 170)
                 }
 
                 HStack(spacing: 14) {
@@ -859,18 +844,14 @@ private struct AdminUserFormSheet: View {
                     FormTextField(title: "Last Name", text: $draft.lastName)
                 }
 
-                HStack(spacing: 14) {
-                    FormTextField(title: "Email", text: $draft.email)
-                    Picker("Session", selection: $draft.session) {
-                        Text("AM").tag("AM")
-                        Text("PM").tag("PM")
-                    }
-                    .disabled(draft.role == .admin)
-                    .frame(width: 170)
-                }
+                Text("Contact Information")
+                    .font(AegisTypography.b2.weight(.semibold))
 
-                if !draft.isEditing {
-                    SecureFormField(title: "Password", text: $draft.password)
+                HStack(spacing: 14) {
+                    FormTextField(title: "Email Address", text: $draft.email)
+                    if !draft.isEditing {
+                        SecureFormField(title: "Password", text: $draft.password)
+                    }
                 }
             }
             .padding(24)
@@ -880,25 +861,62 @@ private struct AdminUserFormSheet: View {
             Divider()
 
             HStack {
-                Spacer()
-                Button("Cancel") {
-                    dismiss()
+                if draft.isEditing {
+                    Button {
+                        dismiss()
+                        onDelete()
+                    } label: {
+                        Label("Delete Profile", systemImage: "trash")
+                            .font(AegisTypography.caption.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .frame(height: 36)
+                            .background(Color.red.opacity(0.82))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .keyboardShortcut(.cancelAction)
 
-                Button(draft.submitTitle) {
+                Spacer()
+
+                Button {
                     Task {
                         if await onSave(draft) {
                             dismiss()
                         }
                     }
+                } label: {
+                    Text(draft.submitTitle)
+                        .frame(width: 180)
                 }
+                .buttonStyle(AegisPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(!draft.canSubmit || isSaving)
             }
             .padding(16)
         }
-        .frame(width: 560, height: draft.isEditing ? 390 : 455)
+        .frame(width: 660, height: draft.isEditing ? 430 : 470)
+    }
+
+    private func sessionOption(_ session: String) -> some View {
+        Button {
+            draft.session = session
+            isShowingSessionOptions = false
+        } label: {
+            HStack {
+                Text(session)
+                Spacer()
+                if draft.session == session {
+                    Image(systemName: "checkmark")
+                }
+            }
+            .font(AegisTypography.b2)
+            .foregroundStyle(.black)
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -941,19 +959,46 @@ private struct PasswordResetSheet: View {
 private struct AdminRoomFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AdminRoomForm
+    @State private var location = "North Wing"
+    @State private var beaconSlots: [Int?]
+    let beacons: [AdminBeacon]
     let isSaving: Bool
     let onSave: (AdminRoomForm) async -> Bool
+    let onDelete: () -> Void
 
-    init(form: AdminRoomForm, isSaving: Bool, onSave: @escaping (AdminRoomForm) async -> Bool) {
+    init(
+        form: AdminRoomForm,
+        beacons: [AdminBeacon],
+        isSaving: Bool,
+        onSave: @escaping (AdminRoomForm) async -> Bool,
+        onDelete: @escaping () -> Void
+    ) {
         self._draft = State(initialValue: form)
+        let assigned = beacons
+            .filter { $0.roomID == form.roomID }
+            .map { Optional($0.id) }
+        self._beaconSlots = State(initialValue: assigned + Array(repeating: nil, count: max(0, 3 - assigned.count)))
+        self.beacons = beacons
         self.isSaving = isSaving
         self.onSave = onSave
+        self.onDelete = onDelete
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(draft.title)
-                .font(.system(size: 18, weight: .bold))
+            HStack {
+                Text(draft.title)
+                    .aegisH2()
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(AegisTypography.h2)
+                        .foregroundStyle(.black)
+                }
+                .buttonStyle(.plain)
+            }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 18)
 
@@ -961,10 +1006,52 @@ private struct AdminRoomFormSheet: View {
 
             VStack(alignment: .leading, spacing: 18) {
                 Text("Room Details")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AegisColors.teal)
+                    .font(AegisTypography.b2.weight(.semibold))
 
-                FormTextField(title: "Room Name", text: $draft.name)
+                HStack(alignment: .bottom, spacing: 40) {
+                    FormTextField(title: "Room Name", text: $draft.name)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Location")
+                            .font(AegisTypography.caption)
+                            .foregroundStyle(AegisColors.mutedText)
+                        Picker("Location", selection: $location) {
+                            Text("North Wing").tag("North Wing")
+                            Text("South Wing").tag("South Wing")
+                        }
+                        .labelsHidden()
+                    }
+                    .frame(width: 240)
+                }
+
+                ForEach(beaconSlots.indices, id: \.self) { index in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Beacon ID \(index + 1)")
+                            .font(AegisTypography.caption)
+                            .foregroundStyle(AegisColors.mutedText)
+                        Picker("Beacon ID \(index + 1)", selection: $beaconSlots[index]) {
+                            Text("Select Beacon").tag(Optional<Int>.none)
+                            ForEach(beacons) { beacon in
+                                Text(beacon.beaconIdentifier).tag(Optional(beacon.id))
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 335)
+                    }
+                }
+
+                Button {
+                    beaconSlots.append(nil)
+                } label: {
+                    Label("Add New Beacon ID", systemImage: "plus")
+                        .font(AegisTypography.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .frame(height: 34)
+                        .background(Color.gray.opacity(0.75))
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
             }
             .padding(24)
 
@@ -974,29 +1061,39 @@ private struct AdminRoomFormSheet: View {
 
             HStack {
                 if draft.isEditing {
-                    Text("Deleting is available from the room table.")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(AegisColors.mutedText)
+                    Button {
+                        dismiss()
+                        onDelete()
+                    } label: {
+                        Label("Delete Room", systemImage: "trash")
+                            .font(AegisTypography.caption.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .frame(height: 36)
+                            .background(Color.red.opacity(0.82))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
                 }
                 Spacer()
-                Button("Cancel") {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
 
-                Button(draft.submitTitle) {
+                Button {
                     Task {
                         if await onSave(draft) {
                             dismiss()
                         }
                     }
+                } label: {
+                    Text(draft.submitTitle)
+                        .frame(width: 180)
                 }
+                .buttonStyle(AegisPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(!draft.canSubmit || isSaving)
             }
             .padding(16)
         }
-        .frame(width: 460, height: 260)
+        .frame(width: 690, height: 620)
     }
 }
 
