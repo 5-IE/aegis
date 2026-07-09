@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		BDF2AA992FFF7418002C79A1 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = BDF2AA982FFF7418002C79A1 /* Sentry */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		BDF221712FF4F5E3004ADAAE /* Aegis-Admin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Aegis-Admin.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BDF2AA992FFF7418002C79A1 /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = "Aegis-Admin";
 			packageProductDependencies = (
+				BDF2AA982FFF7418002C79A1 /* Sentry */,
 			);
 			productName = "Aegis-Admin";
 			productReference = BDF221712FF4F5E3004ADAAE /* Aegis-Admin.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = BDF221682FF4F5E3004ADAAE;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				BDF2AA972FFF7418002C79A1 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BDF221722FF4F5E3004ADAAE /* Products */;
 			projectDirPath = "";
@@ -327,6 +336,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BDF2AA972FFF7418002C79A1 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.21.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BDF2AA982FFF7418002C79A1 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BDF2AA972FFF7418002C79A1 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = BDF221692FF4F5E3004ADAAE /* Project object */;
 }
