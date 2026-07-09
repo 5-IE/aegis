@@ -20,6 +20,7 @@ class HomeViewModel: ObservableObject {
     @Published var totalLate: String = "00"
     @Published var leaveTaken: String = "00"
     @Published var checkedInAt: String = ""
+    @Published var todayStatus: TodayAttendanceStatus = .notCheckedIn
     @Published var attendanceHistory: [Attendance] = []
     @Published var beacons: [Beacon] = []
     
@@ -73,10 +74,14 @@ class HomeViewModel: ObservableObject {
             formatter.dateFormat = "hh:mm a"
             formatter.locale = Locale(identifier: "en_US_POSIX")
             if let checkedInAt = dashboardData.checkedInAt {
-                self.checkedInAt = "\(formatter.string(from: checkedInAt))"
+                self.checkedInAt = formatter.string(from: checkedInAt)
             } else {
                 self.checkedInAt = "-"
             }
+            self.todayStatus = Self.mapTodayStatus(
+                apiStatus: dashboardData.todayStatus,
+                checkedInTime: self.checkedInAt
+            )
         } catch let error as ApiError {
             self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
         } catch {
@@ -133,5 +138,20 @@ class HomeViewModel: ObservableObject {
         formatter.dateFormat = "E, d MMM yyyy"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter.date(from: value) ?? .distantPast
+    }
+
+    private static func mapTodayStatus(apiStatus: String, checkedInTime: String) -> TodayAttendanceStatus {
+        switch apiStatus {
+        case "Checked In":
+            return .checkedIn(time: checkedInTime)
+        case "Running Late":
+            return .runningLate(time: checkedInTime)
+        case "Not Checked In", "Off":
+            return .notCheckedIn
+        case "Checked Out", "Not Checked Out":
+            return .checkedIn(time: checkedInTime)
+        default:
+            return .notCheckedIn
+        }
     }
 }

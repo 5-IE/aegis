@@ -18,9 +18,9 @@ enum AppEnvironment {
     private var defaultBaseURL: String {
         switch self {
         case .development:
-            return "http://10.64.50.204:3000"
+            return "http://10.64.58.125:3000"
         case .production:
-            return "http://10.64.50.204:3000"
+            return "http://10.64.58.125:3000"
         }
     }
 
