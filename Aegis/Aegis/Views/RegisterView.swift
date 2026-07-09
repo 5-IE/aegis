@@ -19,7 +19,7 @@ struct RegisterView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 60, height: 60)
-                    .foregroundColor(.blue)
+                    .foregroundColor(Theme.primary)
 
                 Text("Secure Device Binding")
                     .font(.title2)
@@ -33,7 +33,7 @@ struct RegisterView: View {
 
                 Text("This is only one time process. You are prohibited to bind this device to account you don't belong to.")
                     .font(.subheadline)
-                    .foregroundColor(.red)
+                    .foregroundColor(Theme.leave)
                     .bold()
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
@@ -44,7 +44,7 @@ struct RegisterView: View {
             if viewModel.isRegistered {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(Theme.onTime)
                         .font(.system(size: 48))
 
                     Text("Device Successfully Bound!")
@@ -62,13 +62,13 @@ struct RegisterView: View {
                     .buttonStyle(.borderedProminent)
                 }
                 .padding()
-                .background(Color.green.opacity(0.1))
+                .background(Theme.onTimeBackground)
                 .cornerRadius(12)
 
             } else {
                 VStack(spacing: 16) {
                     Button(action: {
-                        viewModel.registerDevice()
+                        Task { await viewModel.registerDevice(store: dataStore) }
                     }) {
                         HStack {
                             if viewModel.isLoading {
@@ -81,7 +81,7 @@ struct RegisterView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.blue)
+                        .background(Theme.primary)
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
@@ -89,7 +89,7 @@ struct RegisterView: View {
                     if let error = viewModel.errorMessage {
                         Text(error)
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(Theme.leave)
                             .multilineTextAlignment(.center)
                     }
                 }
