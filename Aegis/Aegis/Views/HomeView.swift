@@ -18,7 +18,7 @@ struct HomeView: View {
                 // Greeting header
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(Color(red: 0.72, green: 0.74, blue: 0.74))
+                        .fill(Theme.textSecondary.opacity(0.6))
                         .frame(width: 58, height: 58)
                         .overlay(
                             Image(systemName: "person.fill")
@@ -26,7 +26,7 @@ struct HomeView: View {
                                 .foregroundColor(.white)
                         )
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Hi, \(viewModel.currentUser?.firstName ?? "first_name")")
+                        Text("Hi, \(viewModel.currentUser?.firstName ?? "Learner")")
                             .font(Theme.Fonts.h1)
                             .foregroundColor(Theme.textPrimary)
                         Text(viewModel.todayLabel)
@@ -34,6 +34,13 @@ struct HomeView: View {
                             .foregroundColor(Theme.primaryDark)
                     }
                     Spacer()
+                    Button {
+                        dataStore.signOut()
+                    } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 20))
+                            .foregroundColor(Theme.textSecondary)
+                    }
                 }
  
                 // Stat cards
@@ -46,7 +53,7 @@ struct HomeView: View {
                 }
                 .background(Theme.cardBackground)
                 .cornerRadius(10)
-                .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)
+                .shadow(color: Theme.cardShadow, radius: 6, x: 0, y: 3)
  
                 // Today's Attendance
                 VStack(alignment: .leading, spacing: 8) {
@@ -54,7 +61,7 @@ struct HomeView: View {
                         .font(Theme.Fonts.h2)
                         .foregroundColor(Theme.textPrimary)
  
-                    TodayAttendanceCard(status: .checkedIn(time: viewModel.checkedInAt))
+                    TodayAttendanceCard(status: viewModel.todayStatus)
                 }
  
                 VStack(alignment: .leading, spacing: 8) {
@@ -92,7 +99,7 @@ struct HomeView: View {
                     .padding(.vertical, 6)
                     .background(Theme.cardBackground)
                     .cornerRadius(10)
-                    .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)
+                    .shadow(color: Theme.cardShadow, radius: 6, x: 0, y: 3)
                 }
             }
             .padding(.horizontal, 14)

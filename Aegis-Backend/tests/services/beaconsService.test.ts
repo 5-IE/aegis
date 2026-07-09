@@ -39,6 +39,8 @@ const deviceRow = {
   name: 'iBeacon 1',
   identifier: '1:1000',
   id_room: 3,
+  position_x: 2.5,
+  position_y: 5.0,
   room_name: 'Lab 3.02',
 };
 
@@ -47,6 +49,8 @@ const unassignedRow = {
   name: 'iBeacon Spare',
   identifier: '1:9999',
   id_room: null,
+  position_x: null,
+  position_y: null,
   room_name: null,
 };
 
@@ -61,6 +65,8 @@ describe('toBeaconResource', () => {
       name: 'iBeacon 1',
       beacon_identifier: '1:1000',
       room_id: 3,
+      position_x: 2.5,
+      position_y: 5.0,
       room_name: 'Lab 3.02',
     });
   });
@@ -111,12 +117,18 @@ describe('createBeaconService', () => {
       name: 'iBeacon 1',
       beacon_identifier: '1:1000',
       room_id: 3,
+      position_x: 2.5,
+      position_y: 5.0,
     });
     expect(r.id).toBe(1);
+    expect(r.position_x).toBe(2.5);
+    expect(r.position_y).toBe(5.0);
     expect(dq.insertDevice).toHaveBeenCalledWith({
       name: 'iBeacon 1',
       identifier: '1:1000',
       id_room: 3,
+      position_x: 2.5,
+      position_y: 5.0,
     });
   });
 
@@ -135,6 +147,8 @@ describe('createBeaconService', () => {
       name: 'iBeacon Spare',
       identifier: '1:9999',
       id_room: null,
+      position_x: null,
+      position_y: null,
     });
   });
 
@@ -175,6 +189,17 @@ describe('updateBeaconService', () => {
     const r = await svc.updateBeaconService(1, { room_id: null });
     expect(r.room_id).toBeNull();
     expect(dq.updateDevice).toHaveBeenCalledWith(1, { id_room: null });
+  });
+
+  it('updates beacon position', async () => {
+    const { svc, dq } = await load();
+    (dq.findDeviceById as any)
+      .mockResolvedValueOnce(deviceRow)
+      .mockResolvedValueOnce({ ...deviceRow, position_x: 4.0, position_y: 1.25 });
+    const r = await svc.updateBeaconService(1, { position_x: 4.0, position_y: 1.25 });
+    expect(r.position_x).toBe(4.0);
+    expect(r.position_y).toBe(1.25);
+    expect(dq.updateDevice).toHaveBeenCalledWith(1, { position_x: 4.0, position_y: 1.25 });
   });
 
   it('throws not_found when device missing', async () => {

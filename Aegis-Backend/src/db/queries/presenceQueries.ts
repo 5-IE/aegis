@@ -1,5 +1,6 @@
-import { RowDataPacket } from 'mysql2';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { pool } from '../pool.js';
+import { logger } from '../../lib/logger.js';
 
 export interface PresenceLogRow {
   id_log: number;
@@ -18,10 +19,23 @@ export async function insertPresenceLog(input: {
   positionY: number | null;
   batteryLevel: number | null;
 }): Promise<void> {
-  await pool.query(
+  const [result] = await pool.query<ResultSetHeader>(
     `INSERT INTO \`PRESENCE_LOG\` (\`id_user\`, \`id_room\`, \`position_x\`, \`position_y\`, \`battery_level\`)
      VALUES (?, ?, ?, ?, ?)`,
     [input.userId, input.roomId, input.positionX, input.positionY, input.batteryLevel],
+  );
+  // Prove the write landed: insertId + affectedRows are exactly what MySQL
+  // committed. If this logs affectedRows:1 but the row is "missing", the query
+  // ran against a different DB/host than the one being inspected.
+  logger.info(
+    {
+      table: 'PRESENCE_LOG',
+      insertId: result.insertId,
+      affectedRows: result.affectedRows,
+      userId: input.userId,
+      roomId: input.roomId,
+    },
+    'presence.insert',
   );
 }
 

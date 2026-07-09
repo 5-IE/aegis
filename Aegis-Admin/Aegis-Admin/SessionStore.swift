@@ -63,8 +63,23 @@ final class SessionStore: ObservableObject {
         case signedIn(UserSession)
     }
 
+    enum SignedOutReason: Equatable {
+        case sessionExpired
+        case serverUnreachable
+
+        var message: String {
+            switch self {
+            case .sessionExpired:
+                return "Your session expired — please sign in again."
+            case .serverUnreachable:
+                return "Could not reach the server. Your saved session will be retried on next launch."
+            }
+        }
+    }
+
     @Published private(set) var state: State = .restoring
     @Published private(set) var authError: String?
+    @Published private(set) var signedOutReason: SignedOutReason?
 
     private let api: AegisAPIClient
     private let keychain: KeychainStore
@@ -72,6 +87,11 @@ final class SessionStore: ObservableObject {
     private let userDecoder = JSONDecoder()
     private var accessToken: String?
     private var refreshToken: String?
+    private var tokenExpiryDate: Date?
+    private var refreshTask: Task<AuthResponse, Error>?
+
+    /// Refresh this long before the access token actually expires.
+    private let proactiveRefreshLeeway: TimeInterval = 60
 
     private enum KeychainKey {
         static let refreshToken = "refresh_token"
@@ -95,6 +115,10 @@ final class SessionStore: ObservableObject {
         return nil
     }
 
+    func clearAuthError() {
+        authError = nil
+    }
+
     func restoreSession() async {
         do {
             guard let storedRefreshToken = try keychain.get(KeychainKey.refreshToken) else {
@@ -102,30 +126,38 @@ final class SessionStore: ObservableObject {
                 return
             }
             let response = try await api.refresh(refreshToken: storedRefreshToken)
-            accessToken = response.accessToken
-            refreshToken = response.refreshToken
+            applyTokens(from: response)
             try keychain.set(response.refreshToken, for: KeychainKey.refreshToken)
 
             if let user = try loadStoredUser() {
                 state = .signedIn(user)
             } else {
-                signOutLocally()
+                signOutLocally(reason: nil)
             }
+        } catch let error as AegisAPIError where error.isUnauthorized {
+            // The stored token is truly dead (revoked/rotated/expired).
+            signOutLocally(reason: .sessionExpired)
         } catch {
-            signOutLocally()
+            // Transient failure (offline, backend down): keep the Keychain
+            // token so the session can be restored on a later launch.
+            accessToken = nil
+            refreshToken = nil
+            tokenExpiryDate = nil
+            signedOutReason = .serverUnreachable
+            state = .signedOut
         }
     }
 
     func signIn(username: String, password: String) async {
         authError = nil
+        signedOutReason = nil
         do {
             let response = try await api.login(username: username, password: password)
             guard let apiUser = response.user, apiUser.role == "admin" else {
                 throw AegisAPIError.adminRequired
             }
             let user = apiUser.sessionModel
-            accessToken = response.accessToken
-            refreshToken = response.refreshToken
+            applyTokens(from: response)
             try keychain.set(response.refreshToken, for: KeychainKey.refreshToken)
             try saveUser(user)
             state = .signedIn(user)
@@ -142,14 +174,21 @@ final class SessionStore: ObservableObject {
     }
 
     func authorized<T>(_ operation: (String) async throws -> T) async throws -> T {
-        guard let accessToken else {
+        guard var token = accessToken else {
             throw AegisAPIError.missingRefreshToken
         }
+        // Proactive refresh: renew before expiry so parallel requests never
+        // hit a 401 storm in normal operation.
+        if let expiry = tokenExpiryDate, Date() > expiry.addingTimeInterval(-proactiveRefreshLeeway) {
+            token = try await refreshedAccessToken()
+        }
         do {
-            return try await operation(accessToken)
+            return try await operation(token)
         } catch let error as AegisAPIError {
             if error.isUnauthorized {
-                return try await refreshAndRetry(operation)
+                // Fallback for clock skew or server-side revocation.
+                let freshToken = try await refreshedAccessToken()
+                return try await operation(freshToken)
             }
             throw error
         }
@@ -161,9 +200,15 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    func overview(search: String, sessionFilter: SessionFilter) async throws -> [AttendanceOverviewRow] {
+    func overview(search: String, sessionFilter: SessionFilter, page: Int, perPage: Int) async throws -> AttendanceOverviewPage {
         try await authorized { token in
-            try await api.getOverview(accessToken: token, search: search, sessionFilter: sessionFilter)
+            try await api.getOverview(
+                accessToken: token,
+                search: search,
+                sessionFilter: sessionFilter,
+                page: page,
+                perPage: perPage
+            )
         }
     }
 
@@ -319,21 +364,60 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    func attendanceReport(from: String, to: String, session: SessionFilter) async throws -> AttendanceReport {
+        try await authorized { token in
+            try await api.getAttendanceReport(from: from, to: to, session: session, accessToken: token)
+        }
+    }
+
+    func attendanceReportCSV(from: String, to: String, session: SessionFilter) async throws -> Data {
+        try await authorized { token in
+            try await api.downloadAttendanceReportCSV(from: from, to: to, session: session, accessToken: token)
+        }
+    }
+
     func runRollup(date: String?, userID: Int?) async throws -> RollupResult {
         try await authorized { token in
             try await api.runRollup(date: date, userID: userID, accessToken: token)
         }
     }
 
-    private func refreshAndRetry<T>(_ operation: (String) async throws -> T) async throws -> T {
-        guard let refreshToken else {
+    /// Coalesced refresh: however many callers arrive concurrently, exactly one
+    /// network refresh runs; everyone awaits its result. Safe because this
+    /// class is main-actor-isolated, so checking and setting `refreshTask`
+    /// cannot interleave with another caller.
+    private func refreshedAccessToken() async throws -> String {
+        if let inFlight = refreshTask {
+            return try await inFlight.value.accessToken
+        }
+        guard let currentRefreshToken = refreshToken else {
             throw AegisAPIError.missingRefreshToken
         }
-        let response = try await api.refresh(refreshToken: refreshToken)
-        self.accessToken = response.accessToken
-        self.refreshToken = response.refreshToken
-        try keychain.set(response.refreshToken, for: KeychainKey.refreshToken)
-        return try await operation(response.accessToken)
+        let task = Task<AuthResponse, Error> { [api, keychain] in
+            let response = try await api.refresh(refreshToken: currentRefreshToken)
+            // Persist the rotated token before any awaiter resumes, so no
+            // caller can ever observe (and reuse) the stale one.
+            try keychain.set(response.refreshToken, for: KeychainKey.refreshToken)
+            return response
+        }
+        refreshTask = task
+        defer { refreshTask = nil }
+
+        do {
+            let response = try await task.value
+            applyTokens(from: response)
+            return response.accessToken
+        } catch let error as AegisAPIError where error.isUnauthorized {
+            // Refresh token is dead; there is no way back without re-login.
+            signOutLocally(reason: .sessionExpired)
+            throw error
+        }
+    }
+
+    private func applyTokens(from response: AuthResponse) {
+        accessToken = response.accessToken
+        refreshToken = response.refreshToken
+        tokenExpiryDate = Date().addingTimeInterval(TimeInterval(response.expiresIn))
     }
 
     private func saveUser(_ user: UserSession) throws {
@@ -352,11 +436,15 @@ final class SessionStore: ObservableObject {
         return try userDecoder.decode(UserSession.self, from: data)
     }
 
-    private func signOutLocally() {
+    private func signOutLocally(reason: SignedOutReason? = nil) {
         accessToken = nil
         refreshToken = nil
+        tokenExpiryDate = nil
+        refreshTask?.cancel()
+        refreshTask = nil
         keychain.delete(KeychainKey.refreshToken)
         keychain.delete(KeychainKey.user)
+        signedOutReason = reason
         state = .signedOut
     }
 

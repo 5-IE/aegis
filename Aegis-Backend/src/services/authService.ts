@@ -41,6 +41,7 @@ export interface AuthResult {
 
 export interface LoginResult extends AuthResult {
   user: PublicUser;
+  requireDeviceRegistration: boolean;
 }
 
 function toPublicUser(row: UserRow): PublicUser {
@@ -80,7 +81,10 @@ export async function login(username: string, password: string): Promise<LoginRe
   const ok = await verifyPassword(password, user.password);
   if (!ok) throw new AppError('invalid_credentials');
   const tokens = await issueTokensFor(user);
-  return { ...tokens, user: toPublicUser(user) };
+  // Learners must register a device (store a public key) before they can submit
+  // signature-gated presence requests. Signal to the client when that's still pending.
+  const requireDeviceRegistration = user.role === 'learner' && !user.device_public_key;
+  return { ...tokens, user: toPublicUser(user), requireDeviceRegistration };
 }
 
 export async function refresh(refreshToken: string): Promise<AuthResult> {

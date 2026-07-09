@@ -29,15 +29,15 @@ struct AttendanceHistoryView: View {
                 Button(action: { dismiss() }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size:20,weight:.bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(Theme.textPrimary)
                         .frame(width: 40, height: 40)
-                        .background(Color.white)
+                        .background(Theme.cardBackground)
                         .clipShape(Circle())
                 }
                 Spacer()
                 Text("Attendance History")
                     .font(.system(size: 22, weight:.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.textInverse)
                 Spacer()
                 // invisible spacer to balance the back button
                 Circle()
@@ -52,15 +52,15 @@ struct AttendanceHistoryView: View {
             HStack(spacing: 24) {
                 Button(action: { changeMonth(by: -1) }) {
                     Image(systemName: "chevron.left")
-                        .foregroundColor(.white.opacity(canMovePrevious ? 1 : 0.35))
+                        .foregroundColor(Theme.textInverse.opacity(canMovePrevious ? 1 : 0.35))
                 }
                 .disabled(!canMovePrevious)
                 Text(monthLabel)
                     .font(.system(size: 22, weight:.medium))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.textInverse)
                 Button(action: { changeMonth(by: 1) }) {
                     Image(systemName: "chevron.right")
-                        .foregroundColor(.white.opacity(canMoveNext ? 1 : 0.35))
+                        .foregroundColor(Theme.textInverse.opacity(canMoveNext ? 1 : 0.35))
                 }
                 .disabled(!canMoveNext)
             }
@@ -81,7 +81,7 @@ struct AttendanceHistoryView: View {
                 .padding(.vertical, 10)
                 .background(Theme.cardBackground.opacity(0.85))
                 .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .shadow(color: Color.black.opacity(0.1), radius: 18, x: 0, y: 8)
+                .shadow(color: Theme.cardShadow, radius: 18, x: 0, y: 8)
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
                 .padding(.bottom, 20)

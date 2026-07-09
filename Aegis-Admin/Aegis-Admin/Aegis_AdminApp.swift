@@ -9,6 +9,10 @@ import SwiftUI
 
 @main
 struct Aegis_AdminApp: App {
+    init() {
+        SentrySetup.start()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

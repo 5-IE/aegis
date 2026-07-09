@@ -418,6 +418,8 @@ struct AdminBeaconPayload: Decodable {
     let beaconIdentifier: String
     let roomID: Int?
     let roomName: String?
+    let positionX: Double?
+    let positionY: Double?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -425,6 +427,8 @@ struct AdminBeaconPayload: Decodable {
         case beaconIdentifier = "beacon_identifier"
         case roomID = "room_id"
         case roomName = "room_name"
+        case positionX = "position_x"
+        case positionY = "position_y"
     }
 
     var model: AdminBeacon {
@@ -433,7 +437,9 @@ struct AdminBeaconPayload: Decodable {
             name: name,
             beaconIdentifier: beaconIdentifier,
             roomID: roomID,
-            roomName: roomName
+            roomName: roomName,
+            positionX: positionX,
+            positionY: positionY
         )
     }
 }
@@ -442,13 +448,20 @@ struct AdminBeaconMutationRequest: Encodable {
     let name: String
     let beaconIdentifier: String
     let roomID: Int?
+    let positionX: Double?
+    let positionY: Double?
 
     enum CodingKeys: String, CodingKey {
         case name
         case beaconIdentifier = "beacon_identifier"
         case roomID = "room_id"
+        case positionX = "position_x"
+        case positionY = "position_y"
     }
 
+    /// The backend PATCH distinguishes absent (leave unchanged) from null
+    /// (clear). This body always sends every key, encoding nil values as an
+    /// explicit JSON null so an emptied field clears the stored value.
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
@@ -457,6 +470,16 @@ struct AdminBeaconMutationRequest: Encodable {
             try container.encode(roomID, forKey: .roomID)
         } else {
             try container.encodeNil(forKey: .roomID)
+        }
+        if let positionX {
+            try container.encode(positionX, forKey: .positionX)
+        } else {
+            try container.encodeNil(forKey: .positionX)
+        }
+        if let positionY {
+            try container.encode(positionY, forKey: .positionY)
+        } else {
+            try container.encodeNil(forKey: .positionY)
         }
     }
 }
@@ -533,6 +556,20 @@ struct AdminUserUpdateRequest: Encodable {
         case firstName = "first_name"
         case lastName = "last_name"
     }
+
+    // first_name/last_name are nullable in the backend patch schema: an
+    // explicit JSON null clears the value, an absent key leaves it
+    // unchanged. Emptying the field in the form must clear, so encode
+    // null rather than omitting. session is optional but NOT nullable
+    // (enum AM/PM), so a nil session stays omitted.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(email, forKey: .email)
+        try container.encode(role, forKey: .role)
+        try container.encodeIfPresent(session, forKey: .session)
+        try container.encode(firstName, forKey: .firstName)
+        try container.encode(lastName, forKey: .lastName)
+    }
 }
 
 struct AdminPasswordResetRequest: Encodable {
@@ -550,6 +587,122 @@ struct RollupRequest: Encodable {
     enum CodingKeys: String, CodingKey {
         case date
         case userID = "user_id"
+    }
+}
+
+struct AttendanceReportResponse: Decodable {
+    let range: Range
+    let summary: Summary
+    let perLearner: [Learner]
+    let records: [Record]
+
+    enum CodingKeys: String, CodingKey {
+        case range
+        case summary
+        case perLearner = "per_learner"
+        case records
+    }
+
+    struct Range: Decodable {
+        let from: String
+        let to: String
+        let daysWithSessions: Int
+
+        enum CodingKeys: String, CodingKey {
+            case from
+            case to
+            case daysWithSessions = "days_with_sessions"
+        }
+    }
+
+    struct Summary: Decodable {
+        let learners: Int
+        let attendanceRate: Double
+        let totalLate: Int
+        let totalAbsent: Int
+
+        enum CodingKeys: String, CodingKey {
+            case learners
+            case attendanceRate = "attendance_rate"
+            case totalLate = "total_late"
+            case totalAbsent = "total_absent"
+        }
+    }
+
+    struct Learner: Decodable {
+        let userID: Int
+        let name: String
+        let session: String
+        let present: Int
+        let late: Int
+        let absent: Int
+        let attendanceRate: Double
+
+        enum CodingKeys: String, CodingKey {
+            case userID = "user_id"
+            case name
+            case session
+            case present
+            case late
+            case absent
+            case attendanceRate = "attendance_rate"
+        }
+    }
+
+    struct Record: Decodable {
+        let date: String
+        let userID: Int
+        let name: String
+        let session: String
+        let status: String
+        let clockedInAt: String?
+        let clockedOutAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case date
+            case userID = "user_id"
+            case name
+            case session
+            case status
+            case clockedInAt = "clocked_in_at"
+            case clockedOutAt = "clocked_out_at"
+        }
+    }
+
+    var model: AttendanceReport {
+        AttendanceReport(
+            from: range.from,
+            to: range.to,
+            daysWithSessions: range.daysWithSessions,
+            summary: AttendanceReportSummary(
+                learners: summary.learners,
+                attendanceRate: summary.attendanceRate,
+                totalLate: summary.totalLate,
+                totalAbsent: summary.totalAbsent
+            ),
+            perLearner: perLearner.map {
+                AttendanceReportLearner(
+                    userID: $0.userID,
+                    name: $0.name,
+                    session: $0.session,
+                    present: $0.present,
+                    late: $0.late,
+                    absent: $0.absent,
+                    attendanceRate: $0.attendanceRate
+                )
+            },
+            records: records.map {
+                AttendanceReportRecord(
+                    date: $0.date,
+                    userID: $0.userID,
+                    name: $0.name,
+                    session: $0.session,
+                    status: $0.status,
+                    clockedInAt: $0.clockedInAt,
+                    clockedOutAt: $0.clockedOutAt
+                )
+            }
+        )
     }
 }
 
@@ -573,7 +726,7 @@ final class AegisAPIClient {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(baseURL: URL = URL(string: "https://aegis.salatra.site")!, session: URLSession = .shared) {
+    init(baseURL: URL = AppEnvironment.current.resolvedBaseURL, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
     }
@@ -598,10 +751,16 @@ final class AegisAPIClient {
         return response.model
     }
 
-    func getOverview(accessToken: String, search: String, sessionFilter: SessionFilter) async throws -> [AttendanceOverviewRow] {
+    func getOverview(
+        accessToken: String,
+        search: String,
+        sessionFilter: SessionFilter,
+        page: Int,
+        perPage: Int
+    ) async throws -> AttendanceOverviewPage {
         var query: [URLQueryItem] = [
-            URLQueryItem(name: "page", value: "1"),
-            URLQueryItem(name: "per_page", value: "100")
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "per_page", value: "\(perPage)")
         ]
         let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
@@ -615,7 +774,12 @@ final class AegisAPIClient {
             queryItems: query,
             accessToken: accessToken
         )
-        return response.list.map(\.model)
+        return AttendanceOverviewPage(
+            rows: response.list.map(\.model),
+            total: response.total,
+            page: response.page,
+            perPage: response.perPage
+        )
     }
 
     func getRooms(accessToken: String) async throws -> [Room] {
@@ -821,7 +985,9 @@ final class AegisAPIClient {
         let request = AdminBeaconMutationRequest(
             name: form.name.trimmingCharacters(in: .whitespacesAndNewlines),
             beaconIdentifier: form.beaconIdentifier.trimmingCharacters(in: .whitespacesAndNewlines),
-            roomID: form.roomID
+            roomID: form.roomID,
+            positionX: form.positionXValue,
+            positionY: form.positionYValue
         )
         let response: AdminBeaconPayload = try await send(
             path: "/api/v1/admin/beacons",
@@ -836,7 +1002,9 @@ final class AegisAPIClient {
         let request = AdminBeaconMutationRequest(
             name: form.name.trimmingCharacters(in: .whitespacesAndNewlines),
             beaconIdentifier: form.beaconIdentifier.trimmingCharacters(in: .whitespacesAndNewlines),
-            roomID: form.roomID
+            roomID: form.roomID,
+            positionX: form.positionXValue,
+            positionY: form.positionYValue
         )
         let response: AdminBeaconPayload = try await send(
             path: "/api/v1/admin/beacons/\(id)",
@@ -853,6 +1021,71 @@ final class AegisAPIClient {
             method: "DELETE",
             accessToken: accessToken
         )
+    }
+
+    func getAttendanceReport(
+        from: String,
+        to: String,
+        session: SessionFilter,
+        accessToken: String
+    ) async throws -> AttendanceReport {
+        let response: AttendanceReportResponse = try await send(
+            path: "/api/v1/admin/reports/attendance",
+            queryItems: attendanceReportQuery(from: from, to: to, session: session),
+            accessToken: accessToken
+        )
+        return response.model
+    }
+
+    func downloadAttendanceReportCSV(
+        from: String,
+        to: String,
+        session: SessionFilter,
+        accessToken: String
+    ) async throws -> Data {
+        var query = attendanceReportQuery(from: from, to: to, session: session)
+        query.append(URLQueryItem(name: "format", value: "csv"))
+        do {
+            let request = try makeRequest(
+                path: "/api/v1/admin/reports/attendance",
+                method: "GET",
+                queryItems: query,
+                body: Optional<EmptyBody>.none,
+                accessToken: accessToken
+            )
+            // `self.session`: the `session` parameter (a SessionFilter)
+            // shadows the URLSession property here.
+            let (data, response) = try await self.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw AegisAPIError.invalidResponse
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                if let backend = try? decoder.decode(BackendErrorResponse.self, from: data) {
+                    throw AegisAPIError.backend(code: backend.error, message: backend.message, statusCode: http.statusCode)
+                }
+                throw AegisAPIError.backend(
+                    code: "http_\(http.statusCode)",
+                    message: "Request failed with status \(http.statusCode).",
+                    statusCode: http.statusCode
+                )
+            }
+            return data
+        } catch let error as AegisAPIError {
+            throw error
+        } catch {
+            throw AegisAPIError.network(error.localizedDescription)
+        }
+    }
+
+    private func attendanceReportQuery(from: String, to: String, session: SessionFilter) -> [URLQueryItem] {
+        var query: [URLQueryItem] = [
+            URLQueryItem(name: "from", value: from),
+            URLQueryItem(name: "to", value: to)
+        ]
+        if let value = session.queryValue {
+            query.append(URLQueryItem(name: "session", value: value))
+        }
+        return query
     }
 
     func runRollup(date: String?, userID: Int?, accessToken: String) async throws -> RollupResult {

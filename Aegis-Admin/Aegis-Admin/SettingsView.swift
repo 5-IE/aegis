@@ -68,10 +68,10 @@ struct SettingsView: View {
                         }
 
                         HStack {
-                            if let message = viewModel.saveMessage {
-                                Text(message)
+                            if let outcome = viewModel.saveOutcome {
+                                Text(outcome.text)
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(message == "Settings saved" ? AegisColors.activeGreen : Color.red)
+                                    .foregroundStyle(outcome.isSuccess ? AegisColors.activeGreen : Color.red)
                             }
                             Spacer()
                             Button {

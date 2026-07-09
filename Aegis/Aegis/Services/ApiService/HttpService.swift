@@ -40,12 +40,17 @@ class HttpService {
         queryParams: [String: String]? = nil,
         isRetry: Bool = false
     ) async throws -> T {
-        var urlComponents = URLComponents(string: baseURL + endpoint)!
+        guard var urlComponents = URLComponents(string: baseURL + endpoint) else {
+            throw ApiError(error: "invalid_url", message: "Invalid URL: \(baseURL + endpoint)")
+        }
         if let queryParams = queryParams {
             urlComponents.queryItems = queryParams.map { URLQueryItem(name: $0.key, value: $0.value) }
         }
-        
-        var request = URLRequest(url: urlComponents.url!)
+
+        guard let url = urlComponents.url else {
+            throw ApiError(error: "invalid_url", message: "Could not construct URL for \(endpoint)")
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         
         let headers = getHeaders(isFormData: params != nil && false)
@@ -80,11 +85,16 @@ class HttpService {
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw ApiError(error: "internal_server_error", message: "Invalid response from server.")
+            throw ApiError(error: "internal_server_error", message: "Invalid response from server.", status: (response as! HTTPURLResponse).statusCode)
         }
         
         if let url = urlComponents.url {
             print("\(httpResponse.statusCode) - \(url)")
+        }
+    
+        
+        if httpResponse.statusCode == 204 {
+            return EmptyResponse() as! T
         }
         
         if httpResponse.statusCode == 401 && !isRetry {
@@ -92,20 +102,16 @@ class HttpService {
                 if let apiService = self as? ApiServiceProtocol {
                     if let refreshToken = UserDefaults.standard.string(forKey: "aegis-refresh-token") {
                         let authResponse = try await apiService.refreshToken(refreshToken: refreshToken)
-                        print(authResponse)
-                        
-                        // Store auth data
+
                         UserDefaults.standard.set(authResponse.refreshToken, forKey: "aegis-refresh-token")
                         UserDefaults.standard.set(authResponse.accessToken, forKey: "aegis-access-token")
-                        
+
                         return try await self.request(method, endpoint: endpoint, params: params, queryParams: queryParams, isRetry: true)
                     }
                 }
-            }  catch let error as ApiError {
-                print(error)
-                throw error
             } catch {
-                print(error.localizedDescription)
+                UserDefaults.standard.removeObject(forKey: "aegis-access-token")
+                UserDefaults.standard.removeObject(forKey: "aegis-refresh-token")
                 throw ApiError(error: "unauthorized", message: "Session expired. Please login again.")
             }
         }
@@ -135,13 +141,13 @@ class HttpService {
                 return try decoder.decode(T.self, from: data)
             } catch {
                 print("Decoding error: \(error)")
-                throw ApiError(error: "internal_server_error", message: "Failed to parse data from server")
+                throw ApiError(error: "internal_server_error", message: "Failed to parse data from server", status: httpResponse.statusCode)
             }
         } else {
             if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                throw ApiError(error: errorJson["error"] as? String, message: errorJson["message"] as? String)
+                throw ApiError(error: errorJson["error"] as? String, message: errorJson["message"] as? String, status: httpResponse.statusCode)
             } else {
-                throw ApiError(error: "internal_server_error", message: "Server error: \(httpResponse.statusCode)")
+                throw ApiError(error: "internal_server_error", message: "Server error: \(httpResponse.statusCode)", status: httpResponse.statusCode)
             }
         }
     }

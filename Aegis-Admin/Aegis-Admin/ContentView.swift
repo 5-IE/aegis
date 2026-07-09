@@ -21,19 +21,12 @@ struct ContentView: View {
     }
 }
 
-struct RestoringSessionView: View {
+private struct RestoringSessionView: View {
     var body: some View {
         ZStack {
-            AegisColors.appBackground
+            AdaptiveAppBackground()
             ProgressView()
                 .controlSize(.large)
         }
-    }
-}
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-            .frame(width: 1280, height: 820)
     }
 }

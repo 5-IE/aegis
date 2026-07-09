@@ -124,7 +124,7 @@ struct TodayAttendanceCard: View {
                 }
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .shadow(color: .black.opacity(0.16), radius: 7, x: 0, y: 3)
+        .shadow(color: Theme.cardShadow, radius: 7, x: 0, y: 3)
     }
 }
 
@@ -200,7 +200,7 @@ struct SecondaryButton: View {
                 .background(Theme.cardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.fieldCornerRadius)
-                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                        .stroke(Theme.border, lineWidth: 1)
                 )
         }
     }
@@ -231,7 +231,7 @@ struct IconTextField: View {
         .background(Theme.cardBackground)
         .overlay(
             RoundedRectangle(cornerRadius: Theme.fieldCornerRadius)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                .stroke(Theme.border, lineWidth: 1)
         )
     }
 }

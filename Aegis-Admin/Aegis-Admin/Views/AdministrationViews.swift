@@ -118,7 +118,7 @@ private struct AdministrationSheets: ViewModifier {
                     form: form,
                     isSaving: viewModel.isSaving,
                     onSave: { draft in
-                        await viewModel.save(form: draft, sessionStore: sessionStore)
+                        await viewModel.save(form: draft, sessionStore: sessionStore).isSuccess
                     },
                     onDelete: {
                         deleteTarget = viewModel.users.first { $0.id == form.userID }
@@ -127,7 +127,7 @@ private struct AdministrationSheets: ViewModifier {
             }
             .sheet(item: $passwordResetUser) { user in
                 PasswordResetSheet(user: user, isSaving: viewModel.isSaving) { password in
-                    await viewModel.resetPassword(user: user, newPassword: password, sessionStore: sessionStore)
+                    await viewModel.resetPassword(user: user, newPassword: password, sessionStore: sessionStore).isSuccess
                 }
             }
             .sheet(item: $roomForm) { form in
@@ -136,7 +136,7 @@ private struct AdministrationSheets: ViewModifier {
                     beacons: viewModel.beacons,
                     isSaving: viewModel.isSaving,
                     onSave: { draft in
-                        await viewModel.saveRoom(form: draft, sessionStore: sessionStore)
+                        await viewModel.saveRoom(form: draft, sessionStore: sessionStore).isSuccess
                     },
                     onDelete: {
                         roomDeleteTarget = viewModel.rooms.first { $0.id == form.roomID }
@@ -149,7 +149,7 @@ private struct AdministrationSheets: ViewModifier {
                     rooms: viewModel.rooms,
                     isSaving: viewModel.isSaving,
                     onSave: { draft in
-                        await viewModel.saveBeacon(form: draft, sessionStore: sessionStore)
+                        await viewModel.saveBeacon(form: draft, sessionStore: sessionStore).isSuccess
                     },
                     onDelete: {
                         beaconDeleteTarget = viewModel.beacons.first { $0.id == form.beaconID }
@@ -327,7 +327,7 @@ struct BeaconManagementToolbar: View {
 
 struct AdminPaginationFooter: View {
     let summary: String
-    let message: String?
+    let message: ActionOutcome?
     let successWords: [String]
     let canGoPrevious: Bool
     let canGoNext: Bool
@@ -341,9 +341,9 @@ struct AdminPaginationFooter: View {
                 .foregroundStyle(AegisColors.mutedText)
 
             if let message {
-                Text(message)
+                Text(message.text)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isSuccess(message) ? AegisColors.activeGreen : Color.red)
+                    .foregroundStyle(message.isSuccess ? AegisColors.activeGreen : Color.red)
             }
 
             Spacer()

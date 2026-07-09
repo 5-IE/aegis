@@ -83,6 +83,38 @@ describe('login', () => {
     expect(tokens.insertRefreshToken).toHaveBeenCalledOnce();
   });
 
+  it('sets requireDeviceRegistration for a learner with no device key', async () => {
+    const { svc, users, tokens, pw } = await load();
+    const hash = await pw.hashPassword('hunter2');
+    (users.findUserByUsername as any).mockResolvedValue({ ...learner, password: hash, device_public_key: null });
+    (tokens.insertRefreshToken as any).mockResolvedValue(1);
+
+    const result = await svc.login('alice', 'hunter2');
+    expect(result.requireDeviceRegistration).toBe(true);
+  });
+
+  it('clears requireDeviceRegistration for a learner with a registered device', async () => {
+    const { svc, users, tokens, pw } = await load();
+    const hash = await pw.hashPassword('hunter2');
+    (users.findUserByUsername as any).mockResolvedValue({ ...learner, password: hash, device_public_key: 'AAAA' });
+    (tokens.insertRefreshToken as any).mockResolvedValue(1);
+
+    const result = await svc.login('alice', 'hunter2');
+    expect(result.requireDeviceRegistration).toBe(false);
+  });
+
+  it('never requires device registration for an admin', async () => {
+    const { svc, users, tokens, pw } = await load();
+    const hash = await pw.hashPassword('hunter2');
+    (users.findUserByUsername as any).mockResolvedValue({
+      ...learner, role: 'admin', password: hash, device_public_key: null,
+    });
+    (tokens.insertRefreshToken as any).mockResolvedValue(1);
+
+    const result = await svc.login('alice', 'hunter2');
+    expect(result.requireDeviceRegistration).toBe(false);
+  });
+
   it('throws invalid_credentials for unknown user', async () => {
     const { svc, users } = await load();
     (users.findUserByUsername as any).mockResolvedValue(null);

@@ -1,0 +1,58 @@
+digraph attendance {
+  rankdir=TB;
+  bgcolor="white";
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", fillcolor="#ffffff"];
+  edge [fontname="Helvetica", fontsize=9];
+  labelloc="t";
+  label=<<b>Attendance Lifecycle — ping to daily status</b>>;
+
+  ping [label="POST /api/v1/presence { room_id, ... }\n(signed, learner)", fillcolor="#eef4ff"];
+  log [shape=cylinder, label="PRESENCE_LOG\nraw pings (timestamp, room, x/y, battery)", fillcolor="#eefaf0"];
+  ping -> log [label="insert"];
+
+  subgraph cluster_live {
+    label=<<b>Live status (computeTodayStatus)</b>>; style="rounded,filled"; fillcolor="#f5f8ff"; color="#7aa2e3";
+    first [label="first ping today?", shape=diamond, fillcolor="#fff8dc"];
+    before [label="now < session end?", shape=diamond, fillcolor="#fff8dc"];
+    stale [label="last ping within\nstaleness window?", shape=diamond, fillcolor="#fff8dc"];
+    late [label="now < late_after?", shape=diamond, fillcolor="#fff8dc"];
+    s_ci [label="Checked In", fillcolor="#d6f5d6"];
+    s_co [label="Checked Out", fillcolor="#d6f5d6"];
+    s_nco [label="Not Checked Out", fillcolor="#fff2cc"];
+    s_nci [label="Not Checked In", fillcolor="#fde2e2"];
+    s_rl [label="Running Late", fillcolor="#fde2e2"];
+
+    first -> before [label="yes"];
+    first -> late [label="no"];
+    before -> s_ci [label="yes"];
+    before -> stale [label="no"];
+    stale -> s_nco [label="yes"];
+    stale -> s_co [label="no"];
+    late -> s_nci [label="yes"];
+    late -> s_rl [label="no (before end)"];
+  }
+
+  subgraph cluster_rollup {
+    label=<<b>Nightly rollup (computeHistoricalStatus)</b>>; style="rounded,filled"; fillcolor="#f3fff5"; color="#6fbf7a";
+    r_leave [label="row already 'leave'?", shape=diamond, fillcolor="#fff8dc"];
+    r_skip [label="skip (preserve leave)", fillcolor="#e8eef5"];
+    r_ping [label="any ping in day?", shape=diamond, fillcolor="#fff8dc"];
+    r_abs [label="absent", fillcolor="#fde2e2"];
+    r_when [label="first ping ≤ late_after?", shape=diamond, fillcolor="#fff8dc"];
+    r_early [label="early", fillcolor="#d6f5d6"];
+    r_late [label="late", fillcolor="#fff2cc"];
+    hist [shape=cylinder, label="ATTENDANCE_HISTORY\n(one row / learner / day)"];
+
+    r_leave -> r_skip [label="yes"];
+    r_leave -> r_ping [label="no"];
+    r_ping -> r_abs [label="no"];
+    r_ping -> r_when [label="yes"];
+    r_when -> r_early [label="yes"];
+    r_when -> r_late [label="no"];
+    r_abs -> hist; r_early -> hist; r_late -> hist;
+  }
+
+  log -> first [label="dashboard / overview\n(real time)", color="#2c6cbf", fontcolor="#2c6cbf"];
+  log -> r_leave [label="~3am cron over\nyesterday's window", color="#6fbf7a", fontcolor="#3f8f4f"];
+}

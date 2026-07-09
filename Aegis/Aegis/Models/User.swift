@@ -13,7 +13,7 @@ struct User: Codable {
     let role: String
     let session: String
     let firstName: String
-    let lastName: String
+    let lastName: String?
     let email: String
     
     enum CodingKeys: String, CodingKey {

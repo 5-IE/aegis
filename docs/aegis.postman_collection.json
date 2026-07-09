@@ -145,7 +145,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"room_id\": 1,\n  \"position_x\": 4.2,\n  \"position_y\": 7.1,\n  \"battery_level\": 78\n}"
+              "raw": "{\n  \"room_id\": 1,\n  \"position_x\": 0.42,\n  \"position_y\": 0.71,\n  \"battery_level\": 78\n}"
             },
             "url": { "raw": "{{base_url}}/api/v1/presence", "host": ["{{base_url}}"], "path": ["api", "v1", "presence"] }
           }
@@ -348,6 +348,50 @@
               "path": ["api", "v1", "admin", "rollup"]
             },
             "description": "Body is optional. Default: rollup yesterday for all learners.\n\nExamples:\n- {} → yesterday, all learners\n- {\"date\": \"2026-07-04\"} → that date, all learners\n- {\"user_id\": 42} → yesterday, one learner\n- {\"date\": \"2026-07-04\", \"user_id\": 42} → both\n\nStrict schema: unknown keys return 400."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin — Reports",
+      "item": [
+        {
+          "name": "GET /api/v1/admin/reports/attendance (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/reports/attendance?from=2026-06-01&to=2026-06-30",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "reports", "attendance"],
+              "query": [
+                { "key": "from", "value": "2026-06-01", "description": "YYYY-MM-DD (required)" },
+                { "key": "to", "value": "2026-06-30", "description": "YYYY-MM-DD (required, >= from, range <= 92 days)" },
+                { "key": "session", "value": "AM", "disabled": true, "description": "AM or PM" },
+                { "key": "user_id", "value": "42", "disabled": true, "description": "Restrict to one learner" }
+              ]
+            },
+            "description": "Attendance report aggregated over ATTENDANCE_HISTORY for the date range.\n\nResponse: range (from/to/days_with_sessions), summary (learners/attendance_rate/total_late/total_absent), per_learner, records.\n\npresent = early + late; attendance_rate = present / (present + absent); 'leave' days are excluded from the rate. Rates rounded to 4 decimals.\n\nStrict schema: unknown query params return 400."
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/reports/attendance (CSV)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/reports/attendance?from=2026-06-01&to=2026-06-30&format=csv",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "reports", "attendance"],
+              "query": [
+                { "key": "from", "value": "2026-06-01", "description": "YYYY-MM-DD (required)" },
+                { "key": "to", "value": "2026-06-30", "description": "YYYY-MM-DD (required, >= from, range <= 92 days)" },
+                { "key": "format", "value": "csv" },
+                { "key": "session", "value": "AM", "disabled": true, "description": "AM or PM" },
+                { "key": "user_id", "value": "42", "disabled": true, "description": "Restrict to one learner" }
+              ]
+            },
+            "description": "Same report's records array as text/csv (RFC 4180). Header row: date,user_id,name,session,status,clocked_in_at,clocked_out_at. Null timestamps are empty strings.\n\nContent-Disposition: attachment; filename=aegis-attendance-<from>-<to>.csv"
           }
         }
       ]

@@ -151,6 +151,20 @@ describe('POST /api/v1/admin/beacons', () => {
     });
   });
 
+  it('forwards position_x/position_y to the service', async () => {
+    const { app, token } = await buildTestApp();
+    const svc = await import('../../src/services/beaconsService.js');
+    (svc.createBeaconService as any).mockResolvedValue({ id: 3, name: 'Placed' });
+    const res = await request(app)
+      .post('/api/v1/admin/beacons')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Placed', beacon_identifier: '1:1234', room_id: 3, position_x: 2.5, position_y: 5.0 });
+    expect(res.status).toBe(201);
+    expect(svc.createBeaconService).toHaveBeenCalledWith({
+      name: 'Placed', beacon_identifier: '1:1234', room_id: 3, position_x: 2.5, position_y: 5.0,
+    });
+  });
+
   it('returns 409 on conflict', async () => {
     const { app, token } = await buildTestApp();
     const svc = await import('../../src/services/beaconsService.js');

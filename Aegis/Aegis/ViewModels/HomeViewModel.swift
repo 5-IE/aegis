@@ -20,7 +20,9 @@ class HomeViewModel: ObservableObject {
     @Published var totalLate: String = "00"
     @Published var leaveTaken: String = "00"
     @Published var checkedInAt: String = ""
+    @Published var todayStatus: TodayAttendanceStatus = .notCheckedIn
     @Published var attendanceHistory: [Attendance] = []
+    @Published var beacons: [Beacon] = []
     
     // State Management
     var isLoading: Bool = false
@@ -35,6 +37,7 @@ class HomeViewModel: ObservableObject {
             await self.fetchProfile(store: dataStore)
             await self.fetchDashboardData(store: dataStore)
             await self.fetchAttendanceHistoryData(store: dataStore)
+            await self.fetchBeacons(store: dataStore)
         }
     }
     
@@ -71,10 +74,14 @@ class HomeViewModel: ObservableObject {
             formatter.dateFormat = "hh:mm a"
             formatter.locale = Locale(identifier: "en_US_POSIX")
             if let checkedInAt = dashboardData.checkedInAt {
-                self.checkedInAt = "\(formatter.string(from: checkedInAt))"
+                self.checkedInAt = formatter.string(from: checkedInAt)
             } else {
                 self.checkedInAt = "-"
             }
+            self.todayStatus = Self.mapTodayStatus(
+                apiStatus: dashboardData.todayStatus,
+                checkedInTime: self.checkedInAt
+            )
         } catch let error as ApiError {
             self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
         } catch {
@@ -107,11 +114,44 @@ class HomeViewModel: ObservableObject {
         
         isLoading = false
     }
+    
+    func fetchBeacons(store: DataStore) async {
+        isLoading = true
+        
+        do {
+            let response = try await store.fetchBeacons()
+            let beaconsData = response.list
+            
+            self.beacons = beaconsData
+            
+        } catch let error as ApiError {
+            self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
+        } catch {
+            self.errorMessage = "An unexpected error occurred."
+        }
+        
+        isLoading = false
+    }
 
     private static func attendanceDate(from value: String) -> Date {
         let formatter = DateFormatter()
         formatter.dateFormat = "E, d MMM yyyy"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter.date(from: value) ?? .distantPast
+    }
+
+    private static func mapTodayStatus(apiStatus: String, checkedInTime: String) -> TodayAttendanceStatus {
+        switch apiStatus {
+        case "Checked In":
+            return .checkedIn(time: checkedInTime)
+        case "Running Late":
+            return .runningLate(time: checkedInTime)
+        case "Not Checked In", "Off":
+            return .notCheckedIn
+        case "Checked Out", "Not Checked Out":
+            return .checkedIn(time: checkedInTime)
+        default:
+            return .notCheckedIn
+        }
     }
 }
