@@ -46,12 +46,14 @@ struct LoginResponse: Codable {
     let refreshToken: String
     let expiresIn: Int
     let user: User
-    
+    let requireDeviceRegistration: Bool?
+
     enum CodingKeys: String, CodingKey {
         case accessToken = "access_token"
         case refreshToken = "refresh_token"
         case expiresIn = "expires_in"
         case user
+        case requireDeviceRegistration = "require_device_registration"
     }
 }
 
@@ -61,13 +63,13 @@ struct DashboardData: Codable {
     let leaveTaken: Int
     let todayStatus: String
     let checkedInAt: Date?
-    
+
     enum CodingKeys: String, CodingKey {
         case totalAttendance = "total_attendance"
         case totalLate = "total_late"
         case leaveTaken = "leave_taken"
         case todayStatus = "today_status"
-        case checkedInAt = "checked_in_at"
+        case checkedInAt = "check_in_at"
     }
 }
 
