@@ -57,7 +57,9 @@ Aegis is an IoT attendance system that records when learners enter a classroom �
 
 ## Current state
 
-The backend, admin app, learner app UI, device signing, and beacon firmware are all built and deployed. The one remaining piece — CoreLocation beacon detection on the iPhone — closes the loop from "everything works if you trigger it" to "everything works by walking past."
+**The full end-to-end loop is built and deployed.** The learner app detects classroom beacons, sends signed presence, the backend records and evaluates attendance, the admin sees live radar dots and daily reports. The nightly rollup runs automatically at 3am. Sentry monitors errors across all three apps. One-command deployment to the production VM.
+
+Remaining polish: on-device position trilateration (for precise X/Y placement on the radar map) and HTTPS for internet exposure.
 
 ---
 
