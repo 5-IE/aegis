@@ -155,12 +155,17 @@ final class LiveRadarViewModel: ObservableObject {
     @Published var selectedRoomID: Int?
     @Published var radarPoints: [RadarPoint] = []
     @Published var occupants: [Occupant] = []
+    @Published var roomBeacons: [AdminBeacon] = []
     @Published var metrics = RoomMetrics.empty
     @Published var state: LoadState = .idle
     @Published var occupantsSearchText = ""
 
     private var pollTask: Task<Void, Never>?
     private var selectTask: Task<Void, Never>?
+    /// Poll-error resilience: transient failures keep showing the last data
+    /// (at most a few ticks stale) instead of blanking the whole radar.
+    private var consecutivePollFailures = 0
+    private static let maxConsecutivePollFailures = 3
 
     var selectedRoom: Room? {
         rooms.first { $0.id == selectedRoomID }
@@ -197,11 +202,13 @@ final class LiveRadarViewModel: ObservableObject {
         selectTask = Task {
             do {
                 try await loadSelectedRoom(sessionStore: sessionStore, roomID: roomID)
-                state = .loaded
-            } catch is CancellationError {
-                // Superseded by a newer selection; keep whatever it loaded.
-            } catch {
                 guard roomID == selectedRoomID else { return }
+                consecutivePollFailures = 0
+                state = .loaded
+            } catch {
+                // Cancellation surfaces as URLError wrapped in .network, not
+                // CancellationError — check the task, not the error type.
+                guard !Task.isCancelled, roomID == selectedRoomID else { return }
                 state = .failed(readableMessage(for: error))
             }
         }
@@ -209,14 +216,34 @@ final class LiveRadarViewModel: ObservableObject {
 
     func startPolling(sessionStore: SessionStore) {
         pollTask?.cancel()
+        consecutivePollFailures = 0
         pollTask = Task {
             while !Task.isCancelled {
                 if let roomID = selectedRoomID {
                     do {
                         try await loadSelectedRoom(sessionStore: sessionStore, roomID: roomID)
+                        guard roomID == selectedRoomID else { continue }
+                        consecutivePollFailures = 0
                         state = .loaded
                     } catch {
-                        state = .failed(readableMessage(for: error))
+                        // Teardown cancellation arrives as URLError(.cancelled)
+                        // wrapped in .network; it must not count as a strike
+                        // or write state.
+                        if Task.isCancelled { break }
+                        // An error for a room that is no longer selected is
+                        // not a failure of the current view.
+                        guard roomID == selectedRoomID else { continue }
+                        // If the session died, SessionStore has already
+                        // flipped to signedOut. For transient errors, keep
+                        // showing the (\u{2264}15s stale) view for a few ticks
+                        // before surfacing a failure. A loaded-but-empty room
+                        // is still a valid view — only fail early when
+                        // nothing was ever loaded.
+                        consecutivePollFailures += 1
+                        let hasLoadedView = state == .loaded
+                        if !hasLoadedView || consecutivePollFailures >= Self.maxConsecutivePollFailures {
+                            state = .failed(readableMessage(for: error))
+                        }
                     }
                 }
                 try? await Task.sleep(for: .seconds(5))
@@ -235,13 +262,31 @@ final class LiveRadarViewModel: ObservableObject {
         async let points = sessionStore.roomMap(roomID: roomID)
         async let occupants = sessionStore.currentOccupants(roomID: roomID)
         async let metrics = sessionStore.roomMetrics(roomID: roomID)
-        let loaded = try await (points: points, occupants: occupants, metrics: metrics)
+        // Beacons degrade gracefully: a failed beacons fetch never fails the
+        // whole radar load; the markers just disappear for that refresh.
+        async let beacons = Self.roomBeaconsOrEmpty(sessionStore: sessionStore, roomID: roomID)
+        let loaded = try await (points: points, occupants: occupants, metrics: metrics, beacons: beacons)
         // A slower response for a previously selected room must not
         // overwrite the currently selected room's data.
         guard roomID == selectedRoomID else { return }
         self.radarPoints = loaded.points
         self.occupants = loaded.occupants
         self.metrics = loaded.metrics
+        self.roomBeacons = loaded.beacons
+    }
+
+    private static func roomBeaconsOrEmpty(sessionStore: SessionStore, roomID: Int) async -> [AdminBeacon] {
+        do {
+            let page = try await sessionStore.adminBeacons(
+                assignmentFilter: .assigned,
+                roomID: roomID,
+                page: 1,
+                perPage: 100
+            )
+            return page.beacons
+        } catch {
+            return []
+        }
     }
 }
 

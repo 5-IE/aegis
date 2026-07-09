@@ -308,20 +308,24 @@ Response:
 ```json
 {
   "list": [
-    { "beacon_identifier": "1:2", "room_id": 3, "position_x": 2.50, "position_y": 5.00, "room_name": "Lab 3.02" },
-    { "beacon_identifier": "1:3", "room_id": 4, "position_x": 0.00, "position_y": 1.25, "room_name": "Lab 3.03" }
+    { "beacon_identifier": "1:2", "room_id": 3, "position_x": 0.25, "position_y": 0.50, "room_name": "Lab 3.02" },
+    { "beacon_identifier": "1:3", "room_id": 4, "position_x": 0.00, "position_y": 0.90, "room_name": "Lab 3.03" }
   ]
 }
 ```
 
 Each entry gives the beacon's identifier (`"major:minor"`), its room, and its
-`position_x` / `position_y` within that room (metres from the room origin; may
-be `null` if the beacon hasn't been placed). Store this mapping in memory; the
-positions feed on-device trilateration. Admins receive the same shape via
-`GET /api/v1/admin/beacons` (which also includes `id` and `name`). Positions are
-set by admins through `POST` / `PATCH /api/v1/admin/beacons`
-(`position_x` / `position_y`, both optional). Re-fetch on app foreground if the
-mapping might have changed (rare).
+`position_x` / `position_y` within that room (may be `null` if the beacon
+hasn't been placed). Beacon coordinates follow the shared coordinate contract:
+they are normalized to the room, 0–1 on both axes, with (0, 0) the top-left
+corner and (1, 1) the bottom-right corner. Consumers (e.g. the admin radar)
+clamp values outside 0–1 into range, and senders SHOULD normalize before
+posting. Store this mapping in memory; the positions feed on-device
+trilateration. Admins receive the same shape via `GET /api/v1/admin/beacons`
+(which also includes `id` and `name`). Positions are set by admins through
+`POST` / `PATCH /api/v1/admin/beacons` (`position_x` / `position_y`, both
+optional and nullable). Re-fetch on app foreground if the mapping might have
+changed (rare).
 
 ### Phase B (on every beacon detection while the app is running)
 
@@ -339,6 +343,12 @@ Response: `204 No Content`.
 **Optional fields:**
 - `position_x`, `position_y` — if you compute a position estimate (e.g. from RSSI triangulation).
 - `battery_level` — device battery percentage 0–100, useful for admin dashboards.
+
+**Coordinate contract:** `position_x` / `position_y` are normalized to the
+room, 0–1 on both axes — (0, 0) is the room's top-left corner and (1, 1) is
+the bottom-right corner. Values outside that range are clamped by consumers
+(such as the admin Live Radar), so senders SHOULD normalize their estimates
+before posting.
 
 **Rate limit:** 20 requests per learner per minute. The iPhone app should ping every ~5 minutes normally, so 20/min is a generous ceiling to prevent runaway loops.
 

@@ -780,7 +780,7 @@ private struct LiveRadarView: View {
 
     private var radarMainColumn: some View {
         VStack(spacing: 20) {
-            RadarMapCard(points: viewModel.radarPoints, state: viewModel.state)
+            RadarMapCard(points: viewModel.radarPoints, beacons: viewModel.roomBeacons, state: viewModel.state)
                 .frame(minHeight: 280, idealHeight: 340, maxHeight: 380)
 
             WhitePanel {
@@ -903,6 +903,7 @@ private struct RoomTab: View {
 
 private struct RadarMapCard: View {
     let points: [RadarPoint]
+    let beacons: [AdminBeacon]
     let state: LoadState
 
     var body: some View {
@@ -915,11 +916,12 @@ private struct RadarMapCard: View {
                     LegendItem(color: AegisColors.activeGreen, label: "Active")
                     LegendItem(color: AegisColors.inactiveYellow, label: "Inactive")
                 }
-                RadarPlot(points: points)
+                RadarPlot(points: points, beacons: beacons)
+                    .clipped()
                     .overlay {
                         if case .loading = state {
                             ProgressView()
-                        } else if points.isEmpty {
+                        } else if points.isEmpty && beacons.isEmpty {
                             Text("No live map points.")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AegisColors.mutedText)
@@ -932,12 +934,7 @@ private struct RadarMapCard: View {
 
 private struct RadarPlot: View {
     let points: [RadarPoint]
-
-    private let beacons = [
-        BeaconMarkerData(label: "B01", x: 0.055, y: 0.085),
-        BeaconMarkerData(label: "B02", x: 0.955, y: 0.085),
-        BeaconMarkerData(label: "B03", x: 0.50, y: 0.90)
-    ]
+    let beacons: [AdminBeacon]
 
     var body: some View {
         GeometryReader { proxy in
@@ -958,50 +955,78 @@ private struct RadarPlot: View {
                 }
                 .stroke(Color(red: 0.30, green: 0.36, blue: 0.60).opacity(0.75), lineWidth: 1)
 
+                // Normalized 0-1 coordinates map into the inner room
+                // rectangle, so (1, 1) lands on the room border, not the
+                // card edge.
                 ForEach(points) { point in
                     Circle()
                         .fill(AegisColors.activeGreen)
                         .frame(width: 17, height: 17)
-                        .position(x: size.width * point.x, y: size.height * point.y)
+                        .position(plotPosition(x: point.x, y: point.y, in: plotRect))
                         .help(point.userName)
                 }
 
-                ForEach(beacons) { beacon in
-                    BeaconMarker(beacon: beacon)
-                        .position(x: size.width * beacon.x, y: size.height * beacon.y)
+                ForEach(placedBeacons) { beacon in
+                    BeaconMarker(label: beacon.name, isLabelBelow: beacon.y >= 0.5)
+                        .position(plotPosition(x: beacon.x, y: beacon.y, in: plotRect))
                 }
             }
         }
     }
+
+    /// Beacons with both positions set, clamped to 0-1. Beacons without a
+    /// position are simply not drawn.
+    private var placedBeacons: [PlacedBeacon] {
+        beacons.compactMap { beacon in
+            guard let x = beacon.positionX, let y = beacon.positionY else { return nil }
+            return PlacedBeacon(
+                id: beacon.id,
+                name: beacon.name,
+                x: min(max(x, 0), 1),
+                y: min(max(y, 0), 1)
+            )
+        }
+    }
+
+    private func plotPosition(x: Double, y: Double, in plotRect: CGRect) -> CGPoint {
+        CGPoint(
+            x: plotRect.minX + plotRect.width * x,
+            y: plotRect.minY + plotRect.height * y
+        )
+    }
 }
 
-private struct BeaconMarkerData: Identifiable {
-    let label: String
+private struct PlacedBeacon: Identifiable {
+    let id: Int
+    let name: String
     let x: Double
     let y: Double
-
-    /// Stable identity: the beacon label ("B01"...) is unique per plot.
-    var id: String { label }
 }
 
 private struct BeaconMarker: View {
-    let beacon: BeaconMarkerData
+    let label: String
+    /// When the marker sits in the lower half of the room, the label goes
+    /// below the dot so it stays inside the plot.
+    let isLabelBelow: Bool
 
     var body: some View {
         VStack(spacing: 2) {
-            if beacon.y < 0.5 { label }
+            if !isLabelBelow { labelText }
             Circle()
                 .fill(AegisColors.beaconBlue)
                 .overlay(Circle().stroke(Color.black.opacity(0.35), lineWidth: 1))
                 .frame(width: 16, height: 16)
-            if beacon.y >= 0.5 { label }
+            if isLabelBelow { labelText }
         }
     }
 
-    private var label: some View {
-        Text(beacon.label)
+    private var labelText: some View {
+        Text(label)
             .font(.system(size: 8, weight: .bold))
             .foregroundStyle(AegisColors.beaconBlue)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: 72)
     }
 }
 

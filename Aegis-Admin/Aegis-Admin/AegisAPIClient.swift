@@ -418,6 +418,8 @@ struct AdminBeaconPayload: Decodable {
     let beaconIdentifier: String
     let roomID: Int?
     let roomName: String?
+    let positionX: Double?
+    let positionY: Double?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -425,6 +427,8 @@ struct AdminBeaconPayload: Decodable {
         case beaconIdentifier = "beacon_identifier"
         case roomID = "room_id"
         case roomName = "room_name"
+        case positionX = "position_x"
+        case positionY = "position_y"
     }
 
     var model: AdminBeacon {
@@ -433,7 +437,9 @@ struct AdminBeaconPayload: Decodable {
             name: name,
             beaconIdentifier: beaconIdentifier,
             roomID: roomID,
-            roomName: roomName
+            roomName: roomName,
+            positionX: positionX,
+            positionY: positionY
         )
     }
 }
@@ -442,13 +448,20 @@ struct AdminBeaconMutationRequest: Encodable {
     let name: String
     let beaconIdentifier: String
     let roomID: Int?
+    let positionX: Double?
+    let positionY: Double?
 
     enum CodingKeys: String, CodingKey {
         case name
         case beaconIdentifier = "beacon_identifier"
         case roomID = "room_id"
+        case positionX = "position_x"
+        case positionY = "position_y"
     }
 
+    /// The backend PATCH distinguishes absent (leave unchanged) from null
+    /// (clear). This body always sends every key, encoding nil values as an
+    /// explicit JSON null so an emptied field clears the stored value.
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
@@ -457,6 +470,16 @@ struct AdminBeaconMutationRequest: Encodable {
             try container.encode(roomID, forKey: .roomID)
         } else {
             try container.encodeNil(forKey: .roomID)
+        }
+        if let positionX {
+            try container.encode(positionX, forKey: .positionX)
+        } else {
+            try container.encodeNil(forKey: .positionX)
+        }
+        if let positionY {
+            try container.encode(positionY, forKey: .positionY)
+        } else {
+            try container.encodeNil(forKey: .positionY)
         }
     }
 }
@@ -532,6 +555,20 @@ struct AdminUserUpdateRequest: Encodable {
         case session
         case firstName = "first_name"
         case lastName = "last_name"
+    }
+
+    // first_name/last_name are nullable in the backend patch schema: an
+    // explicit JSON null clears the value, an absent key leaves it
+    // unchanged. Emptying the field in the form must clear, so encode
+    // null rather than omitting. session is optional but NOT nullable
+    // (enum AM/PM), so a nil session stays omitted.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(email, forKey: .email)
+        try container.encode(role, forKey: .role)
+        try container.encodeIfPresent(session, forKey: .session)
+        try container.encode(firstName, forKey: .firstName)
+        try container.encode(lastName, forKey: .lastName)
     }
 }
 
@@ -948,7 +985,9 @@ final class AegisAPIClient {
         let request = AdminBeaconMutationRequest(
             name: form.name.trimmingCharacters(in: .whitespacesAndNewlines),
             beaconIdentifier: form.beaconIdentifier.trimmingCharacters(in: .whitespacesAndNewlines),
-            roomID: form.roomID
+            roomID: form.roomID,
+            positionX: form.positionXValue,
+            positionY: form.positionYValue
         )
         let response: AdminBeaconPayload = try await send(
             path: "/api/v1/admin/beacons",
@@ -963,7 +1002,9 @@ final class AegisAPIClient {
         let request = AdminBeaconMutationRequest(
             name: form.name.trimmingCharacters(in: .whitespacesAndNewlines),
             beaconIdentifier: form.beaconIdentifier.trimmingCharacters(in: .whitespacesAndNewlines),
-            roomID: form.roomID
+            roomID: form.roomID,
+            positionX: form.positionXValue,
+            positionY: form.positionYValue
         )
         let response: AdminBeaconPayload = try await send(
             path: "/api/v1/admin/beacons/\(id)",
