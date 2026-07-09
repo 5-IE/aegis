@@ -61,18 +61,7 @@ struct SettingsView: View {
                             .padding(.top, 4)
 
                         SettingsSubpanel(title: "Adjust Interval", icon: "arrow.clockwise") {
-                            ViewThatFits(in: .horizontal) {
-                                HStack {
-                                    presenceStepper
-                                    Spacer()
-                                    timezoneField
-                                }
-
-                                VStack(alignment: .leading, spacing: 12) {
-                                    presenceStepper
-                                    timezoneField
-                                }
-                            }
+                            presenceStepper
                             Text("Set how long a presence ping stays active before the user is considered stale.")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(AegisColors.mutedText)
@@ -123,11 +112,6 @@ struct SettingsView: View {
         .frame(width: 220)
     }
 
-    private var timezoneField: some View {
-        TextField("Timezone", text: $viewModel.systemConfig.timezone)
-            .textFieldStyle(.roundedBorder)
-            .frame(width: 180)
-    }
 }
 
 private struct SettingsSubpanel<Content: View>: View {

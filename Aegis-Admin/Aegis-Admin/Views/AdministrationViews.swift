@@ -152,9 +152,7 @@ private struct AdministrationSheets: ViewModifier {
                         await viewModel.saveBeacon(form: draft, sessionStore: sessionStore)
                     },
                     onDelete: {
-                        beaconDeleteTarget = viewModel.beacons.first {
-                            $0.id == form.beaconID
-                        }
+                        beaconDeleteTarget = viewModel.beacons.first { $0.id == form.beaconID }
                     }
                 )
             }
@@ -302,7 +300,7 @@ struct BeaconManagementToolbar: View {
     var body: some View {
         HStack(spacing: 12) {
             Label("Beacon Management", systemImage: "sensor.fill")
-                .font(.system(size: 16, weight: .bold))
+                .aegisH2()
 
             Spacer()
 
@@ -314,12 +312,13 @@ struct BeaconManagementToolbar: View {
 
             Button(action: addBeacon) {
                 Label("Register New Beacon", systemImage: "plus")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AegisTypography.caption.weight(.bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 13)
-                    .frame(height: 30)
-                    .background(AegisColors.teal)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .frame(height: 34)
+                    .background {
+                        AegisButtonBackground()
+                    }
             }
             .buttonStyle(.plain)
         }
@@ -463,7 +462,7 @@ struct AdminRoomsTable: View {
                 ForEach(rows) { room in
                     HStack(spacing: 0) {
                         Text(room.name).tableCell(maxWidth: .infinity, alignment: .leading)
-                        Text("—").tableCell(width: 180, alignment: .leading)
+                        Text("—").tableCell(width: 180)
                         Text("\(beaconCount(room)) Sensors").tableCell(width: 170)
                         Text(beaconStatus(room))
                             .foregroundStyle(beaconCount(room) > 0 ? AegisColors.activeGreen : AegisColors.mutedText)
@@ -622,7 +621,6 @@ private struct IconActionButton: View {
 private struct AdminUserFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AdminUserForm
-    @State private var isShowingSessionOptions = false
     let isSaving: Bool
     let onSave: (AdminUserForm) async -> Bool
     let onDelete: () -> Void
@@ -666,42 +664,16 @@ private struct AdminUserFormSheet: View {
                 HStack(spacing: 14) {
                     FormTextField(title: "Learner ID", text: $draft.username)
                         .disabled(draft.isEditing)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Session")
-                            .font(AegisTypography.caption)
-                            .foregroundStyle(AegisColors.mutedText)
-                        Button {
-                            isShowingSessionOptions.toggle()
-                        } label: {
-                            HStack {
-                                Text(draft.session.isEmpty ? "Select Session" : draft.session)
-                                    .foregroundStyle(draft.session.isEmpty ? AegisColors.mutedText : .black)
-                                Spacer()
-                                Image(systemName: "chevron.down")
-                                    .foregroundStyle(AegisColors.mutedText)
-                            }
-                            .font(AegisTypography.b2)
-                            .padding(.horizontal, 12)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 32)
-                            .background(Color.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.gray.opacity(0.55), lineWidth: 1)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: $isShowingSessionOptions, arrowEdge: .bottom) {
-                            VStack(spacing: 0) {
-                                sessionOption("AM")
-                                Divider()
-                                sessionOption("PM")
-                            }
-                            .padding(6)
-                            .frame(width: 250)
-                        }
-                    }
+                    FormDropdownField(
+                        title: "Session",
+                        placeholder: "Select Session",
+                        selection: $draft.session,
+                        options: [
+                            FormDropdownOption(label: "AM", value: "AM"),
+                            FormDropdownOption(label: "PM", value: "PM")
+                        ],
+                        displayText: { $0.isEmpty ? nil : $0 }
+                    )
                 }
 
                 HStack(spacing: 14) {
@@ -760,29 +732,9 @@ private struct AdminUserFormSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 660, height: draft.isEditing ? 430 : 470)
+        .frame(width: 760, height: draft.isEditing ? 520 : 560)
     }
 
-    private func sessionOption(_ session: String) -> some View {
-        Button {
-            draft.session = session
-            isShowingSessionOptions = false
-        } label: {
-            HStack {
-                Text(session)
-                Spacer()
-                if draft.session == session {
-                    Image(systemName: "checkmark")
-                }
-            }
-            .font(AegisTypography.b2)
-            .foregroundStyle(.black)
-            .padding(.horizontal, 10)
-            .frame(height: 34)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 private struct PasswordResetSheet: View {
@@ -876,33 +828,33 @@ private struct AdminRoomFormSheet: View {
                 HStack(alignment: .bottom, spacing: 40) {
                     FormTextField(title: "Room Name", text: $draft.name)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Location")
-                            .font(AegisTypography.caption)
-                            .foregroundStyle(AegisColors.mutedText)
-                        Picker("Location", selection: $location) {
-                            Text("North Wing").tag("North Wing")
-                            Text("South Wing").tag("South Wing")
-                        }
-                        .labelsHidden()
-                    }
+                    FormDropdownField(
+                        title: "Location",
+                        placeholder: "Select Location",
+                        selection: $location,
+                        options: [
+                            FormDropdownOption(label: "North Wing", value: "North Wing"),
+                            FormDropdownOption(label: "South Wing", value: "South Wing")
+                        ],
+                        displayText: { $0.isEmpty ? nil : $0 }
+                    )
                     .frame(width: 240)
                 }
 
                 ForEach(beaconSlots.indices, id: \.self) { index in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Beacon ID \(index + 1)")
-                            .font(AegisTypography.caption)
-                            .foregroundStyle(AegisColors.mutedText)
-                        Picker("Beacon ID \(index + 1)", selection: $beaconSlots[index]) {
-                            Text("Select Beacon").tag(Optional<Int>.none)
-                            ForEach(beacons) { beacon in
-                                Text(beacon.beaconIdentifier).tag(Optional(beacon.id))
-                            }
+                    FormDropdownField(
+                        title: "Beacon ID \(index + 1)",
+                        placeholder: "Select Beacon",
+                        selection: $beaconSlots[index],
+                        options: beacons.map {
+                            FormDropdownOption(label: $0.beaconIdentifier, value: Optional($0.id))
+                        },
+                        displayText: { selectedID in
+                            guard let selectedID else { return nil }
+                            return beacons.first { $0.id == selectedID }?.beaconIdentifier
                         }
-                        .labelsHidden()
-                        .frame(width: 335)
-                    }
+                    )
+                    .frame(width: 335)
                 }
 
                 Button {
@@ -965,12 +917,11 @@ private struct AdminRoomFormSheet: View {
 private struct AdminBeaconFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AdminBeaconForm
-
     let rooms: [Room]
     let isSaving: Bool
     let onSave: (AdminBeaconForm) async -> Bool
     let onDelete: () -> Void
-    
+
     init(
         form: AdminBeaconForm,
         rooms: [Room],
@@ -987,14 +938,10 @@ private struct AdminBeaconFormSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-
-            // MARK: Header
             HStack {
                 Text(draft.title)
                     .aegisH2()
-
                 Spacer()
-
                 Button {
                     dismiss()
                 } label: {
@@ -1004,66 +951,40 @@ private struct AdminBeaconFormSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 18)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 18)
 
             Divider()
 
-            // MARK: Form
-            VStack(alignment: .leading, spacing: 24) {
-
+            VStack(alignment: .leading, spacing: 18) {
                 Text("Beacon Details")
-                    .font(AegisTypography.b2.weight(.semibold))
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AegisColors.teal)
 
-                // MARK: - Row 1
-                HStack(alignment: .top, spacing: 48) {
-
-                    FormTextField(
-                        title: "Beacon ID",
-                        text: $draft.beaconIdentifier
-                    )
-                    .frame(maxWidth: .infinity)
-
-                    VStack(alignment: .leading, spacing: 6) {
-
-                        Text("Location")
-                            .font(AegisTypography.caption)
-                            .foregroundStyle(AegisColors.mutedText)
-
-                        Picker("", selection: .constant("North Wing")) {
-                            Text("North Wing").tag("North Wing")
-                            Text("South Wing").tag("South Wing")
-                        }
-                        .labelsHidden()
-                        .frame(width: 260)
-                    }
-                    .frame(width: 260, alignment: .leading)
+                HStack(spacing: 14) {
+                    FormTextField(title: "Beacon Name", text: $draft.name)
+                    FormTextField(title: "Beacon ID / Serial Number", text: $draft.beaconIdentifier)
                 }
 
-                // MARK: - Row 2
-                VStack(alignment: .leading, spacing: 6) {
-
-                    Text("Room Name")
-                        .font(AegisTypography.caption)
-                        .foregroundStyle(AegisColors.mutedText)
-
-                    Picker("", selection: $draft.roomID) {
-
-                        Text("Select Room")
-                            .tag(Optional<Int>.none)
-
-                        ForEach(rooms) { room in
-                            Text(room.name)
-                                .tag(Optional(room.id))
-                        }
+                FormDropdownField(
+                    title: "Assigned Room",
+                    placeholder: "Unassigned",
+                    selection: $draft.roomID,
+                    options: [
+                        FormDropdownOption(label: "Unassigned", value: Optional<Int>.none)
+                    ] + rooms.map {
+                        FormDropdownOption(label: $0.name, value: Optional($0.id))
+                    },
+                    displayText: { selectedID in
+                        guard let selectedID else { return nil }
+                        return rooms.first { $0.id == selectedID }?.name
                     }
-                    .labelsHidden()
-                    .frame(width: 260)
-                }
+                )
+                .frame(width: 300)
             }
             .padding(24)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             Divider()
 
@@ -1083,28 +1004,21 @@ private struct AdminBeaconFormSheet: View {
                     }
                     .buttonStyle(.plain)
                 }
-
                 Spacer()
 
-                Button("Cancel") {
-                    dismiss()
-                }
-
-                Button {
+                Button(draft.submitTitle) {
                     Task {
                         if await onSave(draft) {
                             dismiss()
                         }
                     }
-                } label: {
-                    Text(draft.submitTitle)
-                        .frame(width: 180)
                 }
                 .buttonStyle(AegisPrimaryButtonStyle())
+                .keyboardShortcut(.defaultAction)
                 .disabled(!draft.canSubmit || isSaving)
             }
             .padding(16)
         }
-        .frame(width: 690, height: 360)
+        .frame(width: 620, height: 340)
     }
 }

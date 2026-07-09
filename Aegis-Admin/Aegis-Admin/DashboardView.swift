@@ -30,58 +30,33 @@ struct DashboardView: View {
                 Text("Dashboard")
                     .screenTitle()
                 Spacer()
-                Button {
-                    showDatePicker.toggle()
-                } label: {
-                    DateChip(
-                        text: selectedDate.formatted(
-                            .dateTime
-                                .day()
-                                .month(.wide)
-                                .year()
-                        )
-                    )
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showDatePicker) {
-                    DatePicker(
-                        "",
-                        selection: $selectedDate,
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
-                    .labelsHidden()
-                    .padding()
-                }
+                datePickerButton
             }
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Dashboard")
                     .screenTitle()
-                Button {
-                    showDatePicker.toggle()
-                } label: {
-                    DateChip(
-                        text: selectedDate.formatted(
-                            .dateTime
-                                .day()
-                                .month(.wide)
-                                .year()
-                        )
-                    )
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showDatePicker) {
-                    DatePicker(
-                        "",
-                        selection: $selectedDate,
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
-                    .labelsHidden()
-                    .padding()
-                }
+                datePickerButton
             }
+        }
+    }
+
+    private var datePickerButton: some View {
+        Button {
+            showDatePicker.toggle()
+        } label: {
+            DateChip(
+                text: selectedDate.formatted(
+                    .dateTime
+                        .day()
+                        .month(.wide)
+                        .year()
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showDatePicker) {
+            DashboardCalendar(selection: $selectedDate)
         }
     }
 
@@ -323,6 +298,112 @@ private struct FilterCheckbox: View {
     }
 }
 
+private struct DashboardCalendar: View {
+    @Binding var selection: Date
+    @State private var displayedMonth: Date
+
+    private let calendar = Calendar.current
+    private let weekdays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 7)
+
+    init(selection: Binding<Date>) {
+        _selection = selection
+        _displayedMonth = State(initialValue: Calendar.current.startOfMonth(for: selection.wrappedValue))
+    }
+
+    var body: some View {
+        VStack(spacing: 22) {
+            HStack {
+                HStack(spacing: 8) {
+                    Text(displayedMonth.formatted(.dateTime.month(.wide).year()))
+                        .font(.system(size: 24, weight: .semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.blue)
+                }
+
+                Spacer()
+
+                HStack(spacing: 34) {
+                    monthButton("chevron.left", offset: -1)
+                    monthButton("chevron.right", offset: 1)
+                }
+            }
+
+            LazyVGrid(columns: columns, spacing: 20) {
+                ForEach(weekdays, id: \.self) { weekday in
+                    Text(weekday)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.gray.opacity(0.55))
+                }
+
+                ForEach(Array(monthCells.enumerated()), id: \.offset) { _, date in
+                    if let date {
+                        Button {
+                            selection = date
+                        } label: {
+                            Text("\(calendar.component(.day, from: date))")
+                                .font(.system(size: 20, weight: isSelected(date) ? .semibold : .regular))
+                                .foregroundStyle(isSelected(date) ? Color.blue : Color.black)
+                                .frame(width: 42, height: 42)
+                                .background {
+                                    if isSelected(date) {
+                                        Circle().fill(Color.blue.opacity(0.13))
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Color.clear.frame(width: 42, height: 42)
+                    }
+                }
+            }
+        }
+        .padding(22)
+        .frame(width: 390)
+        .background(Color.white)
+    }
+
+    private var monthCells: [Date?] {
+        guard
+            let range = calendar.range(of: .day, in: .month, for: displayedMonth),
+            let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: displayedMonth))
+        else {
+            return []
+        }
+
+        let leadingBlanks = calendar.component(.weekday, from: firstDay) - 1
+        let days = range.compactMap { day in
+            calendar.date(byAdding: .day, value: day - 1, to: firstDay)
+        }
+        return Array(repeating: nil, count: leadingBlanks) + days.map(Optional.some)
+    }
+
+    private func monthButton(_ symbol: String, offset: Int) -> some View {
+        Button {
+            if let month = calendar.date(byAdding: .month, value: offset, to: displayedMonth) {
+                displayedMonth = calendar.startOfMonth(for: month)
+            }
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.blue)
+                .frame(width: 30, height: 30)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func isSelected(_ date: Date) -> Bool {
+        calendar.isDate(date, inSameDayAs: selection)
+    }
+}
+
+private extension Calendar {
+    func startOfMonth(for date: Date) -> Date {
+        self.date(from: dateComponents([.year, .month], from: date)) ?? date
+    }
+}
+
 private struct PresentSummaryCard: View {
     let summary: DashboardSummary
 
@@ -405,31 +486,15 @@ private struct AttendanceTable: View {
     let rows: [AttendanceOverviewRow]
     let state: LoadState
 
-    private let columns: [GridItem] = [
-        GridItem(.fixed(280), alignment: .leading),
-        GridItem(.fixed(90), alignment: .leading),
-        GridItem(.fixed(110), alignment: .leading),
-        GridItem(.fixed(110), alignment: .leading),
-        GridItem(.fixed(110), alignment: .leading)
-    ]
-
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            LazyVGrid(columns: columns, spacing: 0) {
-                Text("Learner")
-                Text("Session")
-                Text("Clock-in")
-                Text("Clock-out")
-                Text("Status")
-            }
-            .font(.system(size: 18, weight: .medium))
-            .padding(.leading, 16)
-            .padding(.trailing, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 52)
-            .background(AegisColors.tableHeader)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            TableHeader(columns: [
+                ("Learner", .infinity),
+                ("Session", .infinity),
+                ("Clock-in", .infinity),
+                ("Clock-out", .infinity),
+                ("Status", .infinity)
+            ])
             
             if case .loading = state {
                 TableMessage("Loading attendance...")
@@ -439,18 +504,19 @@ private struct AttendanceTable: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(rows) { row in
-                            // Each row
-                            LazyVGrid(columns: columns, spacing: 0) {
+                            HStack(spacing: 0) {
                                 Text(row.name)
+                                    .tableCell(maxWidth: .infinity, alignment: .leading)
                                 Text(row.session)
+                                    .tableCell(maxWidth: .infinity)
                                 Text(formatDateTime(row.clockedInAt))
+                                    .tableCell(maxWidth: .infinity)
                                 Text(formatDateTime(row.clockedOutAt))
+                                    .tableCell(maxWidth: .infinity)
                                 Text(row.status.titleCasedStatus)
                                     .foregroundStyle(statusColor(row.status.titleCasedStatus))
+                                    .tableCell(maxWidth: .infinity)
                             }
-                            .padding(.leading, 16)
-                            .padding(.trailing, 16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                             .frame(height: 64)
                             .overlay(alignment: .bottom) {
                                 Rectangle().fill(AegisColors.rowDivider).frame(height: 1)

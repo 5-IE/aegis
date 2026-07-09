@@ -71,7 +71,7 @@ struct LiveRadarView: View {
                 .frame(minHeight: 280, idealHeight: 340, maxHeight: 380)
 
             WhitePanel {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 8) {
                     occupantsHeader
                     OccupantsTable(rows: viewModel.filteredOccupants, state: viewModel.state)
                         .frame(minHeight: 150, maxHeight: 260)

@@ -152,10 +152,10 @@ struct DateChip: View {
             Text(text)
             Image(systemName: "chevron.down")
         }
-        .font(.system(size: 20, weight: .semibold))
+        .font(AegisTypography.b2.weight(.semibold))
         .foregroundStyle(.black)
         .padding(.horizontal, 13)
-        .frame(height: 34)
+        .frame(height: 36)
         .background(AegisColors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
@@ -321,10 +321,19 @@ struct FormTextField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 11, weight: .bold))
+                .font(AegisTypography.caption)
                 .foregroundStyle(AegisColors.mutedText)
             TextField(title, text: $text)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .font(AegisTypography.b2)
+                .padding(.horizontal, 12)
+                .frame(height: 40)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Color.gray.opacity(0.55), lineWidth: 1)
+                }
         }
     }
 }
@@ -336,10 +345,97 @@ struct SecureFormField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 11, weight: .bold))
+                .font(AegisTypography.caption)
                 .foregroundStyle(AegisColors.mutedText)
             SecureField(title, text: $text)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .font(AegisTypography.b2)
+                .padding(.horizontal, 12)
+                .frame(height: 40)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Color.gray.opacity(0.55), lineWidth: 1)
+                }
+        }
+    }
+}
+
+struct FormDropdownOption<Value: Hashable>: Identifiable {
+    let label: String
+    let value: Value
+
+    var id: Value { value }
+}
+
+struct FormDropdownField<Value: Hashable>: View {
+    let title: String
+    let placeholder: String
+    @Binding var selection: Value
+    let options: [FormDropdownOption<Value>]
+    let displayText: (Value) -> String?
+
+    @State private var isPresented = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(AegisTypography.caption)
+                .foregroundStyle(AegisColors.mutedText)
+
+            Button {
+                isPresented.toggle()
+            } label: {
+                HStack {
+                    Text(displayText(selection) ?? placeholder)
+                        .foregroundStyle(displayText(selection) == nil ? AegisColors.mutedText : .black)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .foregroundStyle(AegisColors.mutedText)
+                }
+                .font(AegisTypography.b2)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Color.gray.opacity(0.55), lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+                VStack(spacing: 0) {
+                    ForEach(options) { option in
+                        Button {
+                            selection = option.value
+                            isPresented = false
+                        } label: {
+                            HStack {
+                                Text(option.label)
+                                Spacer()
+                                if selection == option.value {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                            .font(AegisTypography.b2)
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 12)
+                            .frame(height: 36)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if option.id != options.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+                .padding(6)
+                .frame(minWidth: 230)
+            }
         }
     }
 }
