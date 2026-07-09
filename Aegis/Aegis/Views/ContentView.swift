@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var locationEngine = BackgroundLocationManager()
+    @StateObject private var locationEngine = AcademyTracker()
     @State private var dataStore = DataStore(apiService: ApiService())
 
     var body: some View {

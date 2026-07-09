@@ -126,6 +126,7 @@ class HomeViewModel: ObservableObject {
         }
         
         isLoading = false
+    }
 
     private static func attendanceDate(from value: String) -> Date {
         let formatter = DateFormatter()

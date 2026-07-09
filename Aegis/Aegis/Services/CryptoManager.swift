@@ -106,11 +106,19 @@ final class CryptoManager {
     ) throws -> (xTimestamp: String, xSignature: String) {
         let key = try loadOrCreateKey()
         let timestamp = Int(Date().timeIntervalSince1970)
+        
+        // 1. Ensure hash is lowercase hex (Node.js does this by default)
         let bodyHashHex = SHA256.hash(data: body)
-            .map { String(format: "%02x", $0) }
+            .compactMap { String(format: "%02x", $0) }
             .joined()
-        let payload = "\(method)\n\(path)\n\(timestamp)\n\(bodyHashHex)"
+        
+        // 2. Canonical payload matches your Node.js middleware
+        let payload = "\(method.uppercased())\n\(path)\n\(timestamp)\n\(bodyHashHex)"
+        
+        // 3. Sign and ensure DER format
         let signature = try key.signature(for: Data(payload.utf8))
+        
+        // 4. Use raw DER representation
         return (
             xTimestamp: String(timestamp),
             xSignature: signature.derRepresentation.base64EncodedString()

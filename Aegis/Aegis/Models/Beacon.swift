@@ -10,8 +10,8 @@ import Foundation
 struct Beacon: Codable {
     let beaconIdentifier: String
     let roomId: Int
-    let positionX: Double
-    let positionY: Double
+    let positionX: Double?
+    let positionY: Double?
     
     enum CodingKeys: String, CodingKey {
         case beaconIdentifier = "beacon_identifier"

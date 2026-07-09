@@ -21,47 +21,45 @@ struct BeaconAnchor {
 // Your physical map
 let AcademyAnchors = [
     BeaconAnchor(major: 244, minor: 0, x: 0.0, y: 0.0),
-    BeaconAnchor(major: 244, minor: 0, x: 5.0, y: 0.0),
-    BeaconAnchor(major: 244, minor: 0, x: 0.0, y: 5.0)
+    BeaconAnchor(major: 244, minor: 1, x: 5.0, y: 0.0),
+    BeaconAnchor(major: 244, minor: 2, x: 0.0, y: 5.0)
 ]
 
 func calculatePosition(beacons: [CLBeacon], anchors: [BeaconAnchor]) -> CGPoint? {
-    var points: [(Double, Double, Double)] = []
+    var points: [(x: Double, y: Double, r: Double)] = []
     
     for beacon in beacons {
-        // Safe casting: CLBeaconMajorValue is UInt16
-        let major = UInt16(beacon.major.intValue)
         let minor = UInt16(beacon.minor.intValue)
-        
-        if let anchor = anchors.first(where: { $0.major == major && $0.minor == minor }) {
-            // Only include if accuracy is valid (>= 0)
-            if beacon.accuracy >= 0 {
-                points.append((anchor.x, anchor.y, beacon.accuracy))
-                print(points)
-            }
+        print(minor)
+        if let anchor = anchors.first(where: { $0.minor == minor }), beacon.accuracy >= 0 {
+            points.append((x: anchor.x, y: anchor.y, r: beacon.accuracy))
+            print("append")
         }
     }
     
+    points.append((1.0, 5.0, 8.373737))
+    
+    // REQUIRE 3 unique beacons
     guard points.count >= 3 else { return nil }
     
-    // 2. Solve the linear system
-    // Using the Least Squares approach for trilateration:
-    let (p1, p2, p3) = (points[0], points[1], points[2])
+    let p1 = points[0], p2 = points[1], p3 = points[2]
     
-    let a = 2 * (p2.0 - p1.0)
-    let b = 2 * (p2.1 - p1.1)
-    let c = pow(p1.2, 2) - pow(p2.2, 2) - pow(p1.0, 2) + pow(p2.0, 2) - pow(p1.2, 2) + pow(p2.1, 2)
+    // Trilateration formula (Standard Algebraic Solution)
+    let a = 2 * (p2.x - p1.x)
+    let b = 2 * (p2.y - p1.y)
+    let c = pow(p1.r, 2) - pow(p2.r, 2) - pow(p1.x, 2) + pow(p2.x, 2) - pow(p1.y, 2) + pow(p2.y, 2)
     
-    let d = 2 * (p3.0 - p2.0)
-    let e = 2 * (p3.1 - p2.1)
-    let f = pow(p2.2, 2) - pow(p3.2, 2) - pow(p2.0, 2) + pow(p3.0, 2) - pow(p2.1, 2) + pow(p3.1, 2)
+    let d = 2 * (p3.x - p2.x)
+    let e = 2 * (p3.y - p2.y)
+    let f = pow(p2.r, 2) - pow(p3.r, 2) - pow(p2.x, 2) + pow(p3.x, 2) - pow(p2.y, 2) + pow(p3.y, 2)
     
     let W = (a * e) - (b * d)
-    if W == 0 { return nil }
+    print(W)
+    guard W != 0 else { return nil }
     
     let x = (c * e - b * f) / W
     let y = (a * f - c * d) / W
     
-    print(CGPoint(x: x, y: y))
+    print(x, y)
     return CGPoint(x: x, y: y)
 }

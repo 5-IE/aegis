@@ -90,7 +90,6 @@ class DataStore {
     func fetchBeacons() async throws -> ListResponse<[Beacon]> {
         let response = try await apiService.fetchBeacons()
         self.beacons = response.list
-        print(self.beacons)
         return response
     }
 

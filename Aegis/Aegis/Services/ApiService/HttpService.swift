@@ -86,6 +86,7 @@ class HttpService {
         if let url = urlComponents.url {
             print("\(httpResponse.statusCode) - \(url)")
         }
+    
         
         if httpResponse.statusCode == 204 {
             return EmptyResponse() as! T

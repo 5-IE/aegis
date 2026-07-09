@@ -44,6 +44,10 @@ class ApiService: HttpService, ApiServiceProtocol {
         if let batteryLevel { params["battery_level"] = batteryLevel }
         return try await request("POST", endpoint: "/api/v1/presence", params: params)
     }
+    func sendLocation(roomId: Int, positionX: Double, positionY: Double, batteryLevel: Int) async throws -> EmptyResponse {
+        let params: [String: Any] = ["room_id": roomId, "position_x": positionX, "position_y": positionY, "battery_level": batteryLevel]
+        return try await request("POST", endpoint: "/api/v1/presence", params: params)
+    }
     func fetchProfile() async throws -> User {
         return try await request("GET", endpoint: "/api/v1/me")
     }
@@ -60,9 +64,5 @@ class ApiService: HttpService, ApiServiceProtocol {
         if let page { params["page"] = String(page) }
         if let perPage { params["per_page"] = String(perPage) }
         return try await request("GET", endpoint: "/api/v1/histories", queryParams: params)
-    }
-    func sendLocation(roomId: Int, positionX: Double, positionY: Double, batteryLevel: Int) async throws -> EmptyResponse {
-        let params: [String: Any] = ["room_id": roomId, "position_x": positionX, "position_y": positionY, "battery_level": batteryLevel]
-        return try await request("POST", endpoint: "/api/v1/presence", params: params)
     }
 }
