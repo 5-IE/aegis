@@ -1076,6 +1076,15 @@ private struct AdminBeaconFormSheet: View {
                     .frame(width: 220)
                 }
 
+                HStack(spacing: 14) {
+                    FormTextField(title: "Position X (0\u{2013}1)", text: $draft.positionXText)
+                    FormTextField(title: "Position Y (0\u{2013}1)", text: $draft.positionYText)
+                }
+
+                Text("Positions are normalized to the room: (0, 0) is top-left, (1, 1) is bottom-right. Leave empty to clear the beacon's position.")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AegisColors.mutedText)
+
                 if let errorText {
                     SheetErrorText(message: errorText)
                 }
@@ -1114,7 +1123,7 @@ private struct AdminBeaconFormSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 620, height: 340 + (errorText == nil ? 0 : 40))
+        .frame(width: 620, height: 445 + (errorText == nil ? 0 : 40))
     }
 }
 

@@ -86,6 +86,17 @@ enum FormValidators {
         return nil
     }
 
+    /// Normalized beacon position: empty (means "no position") or a number
+    /// in 0...1.
+    static func validateOptionalPosition(_ raw: String, axis: String) -> String? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        guard let parsed = Double(value), parsed >= 0, parsed <= 1 else {
+            return "Position \(axis) must be a number between 0 and 1, or empty."
+        }
+        return nil
+    }
+
     /// Positive integer or empty (empty means "not provided").
     static func validateOptionalUserID(_ raw: String) -> String? {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -129,6 +140,12 @@ enum FormValidators {
             return message
         }
         if let message = validateBeaconIdentifier(form.beaconIdentifier) {
+            return message
+        }
+        if let message = validateOptionalPosition(form.positionXText, axis: "X") {
+            return message
+        }
+        if let message = validateOptionalPosition(form.positionYText, axis: "Y") {
             return message
         }
         return nil

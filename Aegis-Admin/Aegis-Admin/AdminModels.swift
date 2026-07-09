@@ -302,6 +302,10 @@ struct AdminBeacon: Identifiable, Equatable {
     let beaconIdentifier: String
     let roomID: Int?
     let roomName: String?
+    /// Normalized 0–1 placement within the room; nil when the beacon has not
+    /// been positioned yet.
+    let positionX: Double?
+    let positionY: Double?
 
     var assignmentText: String {
         roomName ?? "Unassigned"
@@ -334,6 +338,10 @@ struct AdminBeaconForm: Identifiable, Equatable {
     var name = ""
     var beaconIdentifier = ""
     var roomID: Int?
+    /// Normalized 0–1 position text; an empty field means "no position"
+    /// and is sent to the backend as an explicit null.
+    var positionXText = ""
+    var positionYText = ""
 
     var id: UUID { formID }
     var isEditing: Bool { beaconID != nil }
@@ -345,6 +353,14 @@ struct AdminBeaconForm: Identifiable, Equatable {
         !beaconIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    var positionXValue: Double? {
+        Double(positionXText.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    var positionYValue: Double? {
+        Double(positionYText.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
     init() {}
 
     init(beacon: AdminBeacon) {
@@ -352,6 +368,14 @@ struct AdminBeaconForm: Identifiable, Equatable {
         self.name = beacon.name
         self.beaconIdentifier = beacon.beaconIdentifier
         self.roomID = beacon.roomID
+        self.positionXText = beacon.positionX.map { Self.formatPosition($0) } ?? ""
+        self.positionYText = beacon.positionY.map { Self.formatPosition($0) } ?? ""
+    }
+
+    private static func formatPosition(_ value: Double) -> String {
+        // Trim float noise but keep meaningful precision (e.g. "0.25").
+        let formatted = String(format: "%g", value)
+        return formatted
     }
 }
 
