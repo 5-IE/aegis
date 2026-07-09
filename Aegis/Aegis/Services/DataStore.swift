@@ -16,7 +16,7 @@ import SwiftUI
 class DataStore {
     // Global States
     var isLoggedIn: Bool = false
-    var isRegistered: Bool = true
+    var isRegistered: Bool = UserDefaults.standard.bool(forKey: "aegis-device-registered")
 
     var isLoading: Bool = false
     var errorMessage: String?
@@ -52,14 +52,26 @@ class DataStore {
     func login(username: String, password: String) async throws -> LoginResponse {
         let response = try await apiService.login(username: username, password: password)
         self.currentUser = response.user
-        
-        // Save the token using the exact key required by HttpService
+
         UserDefaults.standard.set(response.refreshToken, forKey: "aegis-refresh-token")
         UserDefaults.standard.set(response.accessToken, forKey: "aegis-access-token")
+
+        let registered = !(response.requireDeviceRegistration ?? false)
+        self.isRegistered = registered
+        UserDefaults.standard.set(registered, forKey: "aegis-device-registered")
 
         return response
     }
     
+    func signOut() {
+        UserDefaults.standard.removeObject(forKey: "aegis-access-token")
+        UserDefaults.standard.removeObject(forKey: "aegis-refresh-token")
+        currentUser = nil
+        dashboardData = nil
+        attendanceHistoryData = nil
+        isLoggedIn = false
+    }
+
     func fetchProfile() async throws -> User {
         let profile = try await apiService.fetchProfile()
         self.currentUser = profile

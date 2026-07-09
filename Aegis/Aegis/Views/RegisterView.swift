@@ -9,8 +9,9 @@
 import SwiftUI
 
 struct RegisterView: View {
+    @Environment(DataStore.self) private var dataStore
     @StateObject private var viewModel = RegisterViewModel()
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 24) {
@@ -46,19 +47,25 @@ struct RegisterView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
                             .font(.system(size: 48))
-                        
+
                         Text("Device Successfully Bound!")
                             .font(.headline)
-                        
+
                         Text("Your hardware key is securely registered with the server.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
+
+                        Button("Continue") {
+                            dataStore.isRegistered = true
+                            UserDefaults.standard.set(true, forKey: "aegis-device-registered")
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                     .padding()
                     .background(Color.green.opacity(0.1))
                     .cornerRadius(12)
-                    
+
                 } else {
                     VStack(spacing: 16) {
                         Button(action: {

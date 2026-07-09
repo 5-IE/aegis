@@ -26,7 +26,7 @@ struct HomeView: View {
                                 .foregroundColor(.white)
                         )
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Hi, \(viewModel.currentUser?.firstName ?? "first_name")")
+                        Text("Hi, \(viewModel.currentUser?.firstName ?? "Learner")")
                             .font(Theme.Fonts.h1)
                             .foregroundColor(Theme.textPrimary)
                         Text(viewModel.todayLabel)
@@ -34,6 +34,13 @@ struct HomeView: View {
                             .foregroundColor(Theme.primaryDark)
                     }
                     Spacer()
+                    Button {
+                        dataStore.signOut()
+                    } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 20))
+                            .foregroundColor(Theme.textSecondary)
+                    }
                 }
  
                 // Stat cards
@@ -54,7 +61,7 @@ struct HomeView: View {
                         .font(Theme.Fonts.h2)
                         .foregroundColor(Theme.textPrimary)
  
-                    TodayAttendanceCard(status: .checkedIn(time: viewModel.checkedInAt))
+                    TodayAttendanceCard(status: viewModel.todayStatus)
                 }
  
                 VStack(alignment: .leading, spacing: 8) {
