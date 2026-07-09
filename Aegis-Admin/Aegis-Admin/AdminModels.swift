@@ -266,7 +266,7 @@ struct AdminRoomForm: Identifiable, Equatable {
     var id: UUID { formID }
     var isEditing: Bool { roomID != nil }
     var title: String { isEditing ? "Edit Room" : "Add New Room" }
-    var submitTitle: String { isEditing ? "Save Room" : "Create Room" }
+    var submitTitle: String { isEditing ? "Save Room" : "Create New Room" }
     var canSubmit: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     init() {}
@@ -386,7 +386,7 @@ struct AdminUserForm: Identifiable, Equatable {
     var password = ""
     var email = ""
     var role: AdminUserRole = .learner
-    var session = "AM"
+    var session = ""
     var firstName = ""
     var lastName = ""
 
@@ -394,11 +394,11 @@ struct AdminUserForm: Identifiable, Equatable {
     var isEditing: Bool { userID != nil }
 
     var title: String {
-        isEditing ? "Edit User" : "Add New User"
+        isEditing ? "Edit Learner" : "Add New Learner"
     }
 
     var submitTitle: String {
-        isEditing ? "Save User" : "Create User"
+        isEditing ? "Edit Learner Profile" : "Create Learner Profile"
     }
 
     var canSubmit: Bool {
