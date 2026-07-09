@@ -4,6 +4,9 @@ struct DashboardView: View {
     @ObservedObject var viewModel: DashboardViewModel
     @ObservedObject var sessionStore: SessionStore
 
+    @State private var selectedDate = Date()
+    @State private var showDatePicker = false
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
             dashboardHeader
@@ -16,6 +19,9 @@ struct DashboardView: View {
                 await viewModel.load(sessionStore: sessionStore)
             }
         }
+        .onChange(of: selectedDate) { _, newDate in
+            print("Selected date:", newDate)
+        }
     }
 
     private var dashboardHeader: some View {
@@ -24,13 +30,57 @@ struct DashboardView: View {
                 Text("Dashboard")
                     .screenTitle()
                 Spacer()
-                DateChip(text: viewModel.formattedDate)
+                Button {
+                    showDatePicker.toggle()
+                } label: {
+                    DateChip(
+                        text: selectedDate.formatted(
+                            .dateTime
+                                .day()
+                                .month(.wide)
+                                .year()
+                        )
+                    )
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showDatePicker) {
+                    DatePicker(
+                        "",
+                        selection: $selectedDate,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .padding()
+                }
             }
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Dashboard")
                     .screenTitle()
-                DateChip(text: viewModel.formattedDate)
+                Button {
+                    showDatePicker.toggle()
+                } label: {
+                    DateChip(
+                        text: selectedDate.formatted(
+                            .dateTime
+                                .day()
+                                .month(.wide)
+                                .year()
+                        )
+                    )
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showDatePicker) {
+                    DatePicker(
+                        "",
+                        selection: $selectedDate,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .padding()
+                }
             }
         }
     }
@@ -99,24 +149,177 @@ struct DashboardView: View {
                     Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
                 }
 
-            Menu {
-                Picker("Session", selection: $viewModel.sessionFilter) {
-                    ForEach(SessionFilter.allCases) { filter in
-                        Text(filter.rawValue).tag(filter)
-                    }
-                }
-                Button("Apply") {
+            FilterButton(
+                sessionFilter: $viewModel.sessionFilter,
+                statusFilters: $viewModel.statusFilters,
+                onApply: {
+                    Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
+                },
+                onRemove: {
+                    viewModel.sessionFilter = .all
+                    viewModel.statusFilters = []
                     Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
                 }
-            } label: {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(AegisColors.teal)
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color.white))
-            }
-            .menuStyle(.borderlessButton)
+            )
         }
+    }
+}
+
+private struct FilterButton: View {
+    @Binding var sessionFilter: SessionFilter
+    @Binding var statusFilters: Set<AttendanceStatusFilter>
+    let onApply: () -> Void
+    let onRemove: () -> Void
+
+    @State private var showFilters = false
+
+    var body: some View {
+        Button {
+            showFilters.toggle()
+        } label: {
+            Image(systemName: showFilters ? "xmark" : "line.3.horizontal.decrease")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AegisColors.teal)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(.ultraThinMaterial))
+                .overlay(
+                    Circle().stroke(AegisColors.panelBorder, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showFilters) {
+            FiltersPanel(
+                sessionFilter: $sessionFilter,
+                statusFilters: $statusFilters,
+                onApply: {
+                    onApply()
+                    showFilters = false
+                },
+                onRemove: {
+                    onRemove()
+                    showFilters = false
+                },
+                onClose: { showFilters = false }
+            )
+        }
+    }
+}
+
+private struct FiltersPanel: View {
+    @Binding var sessionFilter: SessionFilter
+    @Binding var statusFilters: Set<AttendanceStatusFilter>
+    let onApply: () -> Void
+    let onRemove: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Filters")
+                    .font(.system(size: 22, weight: .bold))
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.black)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Session")
+                        .font(.system(size: 16, weight: .bold))
+                    HStack(spacing: 32) {
+                        ForEach(SessionFilter.allCases) { filter in
+                            FilterCheckbox(
+                                label: filter.rawValue,
+                                isChecked: sessionFilter == filter
+                            ) {
+                                sessionFilter = filter
+                            }
+                        }
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Status")
+                        .font(.system(size: 16, weight: .bold))
+                    HStack(spacing: 32) {
+                        ForEach(AttendanceStatusFilter.allCases) { status in
+                            FilterCheckbox(
+                                label: status.rawValue,
+                                isChecked: statusFilters.contains(status)
+                            ) {
+                                if statusFilters.contains(status) {
+                                    statusFilters.remove(status)
+                                } else {
+                                    statusFilters.insert(status)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(20)
+
+            HStack {
+                Button("Remove Filter", action: onRemove)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 16)
+                    .frame(height: 40)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(AegisColors.panelBorder, lineWidth: 1)
+                    )
+
+                Spacer()
+
+                Button("Apply Filters", action: onApply)
+                    .buttonStyle(AegisPrimaryButtonStyle())
+            }
+            .padding(20)
+        }
+        .frame(width: 420)
+    }
+}
+
+private struct FilterCheckbox: View {
+    let label: String
+    let isChecked: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isChecked ? AegisColors.teal : Color.clear)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(isChecked ? Color.clear : Color.gray.opacity(0.4), lineWidth: 1.5)
+                        )
+                    if isChecked {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 22, height: 22)
+
+                Text(label)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(.black)
+            }
+            .contentShape(Rectangle())   // ← add this line
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -202,16 +405,32 @@ private struct AttendanceTable: View {
     let rows: [AttendanceOverviewRow]
     let state: LoadState
 
+    private let columns: [GridItem] = [
+        GridItem(.fixed(280), alignment: .leading),
+        GridItem(.fixed(90), alignment: .leading),
+        GridItem(.fixed(110), alignment: .leading),
+        GridItem(.fixed(110), alignment: .leading),
+        GridItem(.fixed(110), alignment: .leading)
+    ]
+
     var body: some View {
         VStack(spacing: 0) {
-            TableHeader(columns: [
-                ("Learner", .infinity),
-                ("Session", 110),
-                ("Clock-in", 130),
-                ("Clock-out", 130),
-                ("Status", 110)
-            ])
-
+            // Header
+            LazyVGrid(columns: columns, spacing: 0) {
+                Text("Learner")
+                Text("Session")
+                Text("Clock-in")
+                Text("Clock-out")
+                Text("Status")
+            }
+            .font(.system(size: 18, weight: .medium))
+            .padding(.leading, 16)
+            .padding(.trailing, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 52)
+            .background(AegisColors.tableHeader)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            
             if case .loading = state {
                 TableMessage("Loading attendance...")
             } else if rows.isEmpty {
@@ -220,15 +439,18 @@ private struct AttendanceTable: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(rows) { row in
-                            HStack(spacing: 0) {
-                                Text(row.name).tableCell(maxWidth: .infinity, alignment: .leading)
-                                Text(row.session).tableCell(width: 110)
-                                Text(formatDateTime(row.clockedInAt)).tableCell(width: 130)
-                                Text(formatDateTime(row.clockedOutAt)).tableCell(width: 130)
+                            // Each row
+                            LazyVGrid(columns: columns, spacing: 0) {
+                                Text(row.name)
+                                Text(row.session)
+                                Text(formatDateTime(row.clockedInAt))
+                                Text(formatDateTime(row.clockedOutAt))
                                 Text(row.status.titleCasedStatus)
-                                    .foregroundStyle(statusColor(row.status))
-                                    .tableCell(width: 110)
+                                    .foregroundStyle(statusColor(row.status.titleCasedStatus))
                             }
+                            .padding(.leading, 16)
+                            .padding(.trailing, 16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .frame(height: 64)
                             .overlay(alignment: .bottom) {
                                 Rectangle().fill(AegisColors.rowDivider).frame(height: 1)
@@ -236,6 +458,7 @@ private struct AttendanceTable: View {
                         }
                     }
                 }
+                .scrollIndicators(.visible)
                 .frame(minHeight: 130, maxHeight: .infinity)
             }
 
