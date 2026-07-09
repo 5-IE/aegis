@@ -15,6 +15,12 @@ struct ApiError: Error {
     let error: String?
     let message: String?
     let status: Int
+
+    init(error: String?, message: String?, status: Int = 0) {
+        self.error = error
+        self.message = message
+        self.status = status
+    }
 }
 
 struct ListResponse<T: Codable>: Codable {

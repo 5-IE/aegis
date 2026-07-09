@@ -34,37 +34,12 @@ enum AegisColors {
     static let inactiveYellow = Color(red: 0.77, green: 0.68, blue: 0.20)
     static let beaconBlue = Color(red: 0.29, green: 0.31, blue: 0.58)
 
-    static var appBackground: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.70, green: 0.84, blue: 0.88),
-                    Color(red: 0.88, green: 0.92, blue: 0.86),
-                    Color(red: 0.72, green: 0.86, blue: 0.91)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            RadialGradient(
-                colors: [Color.white.opacity(0.52), Color.white.opacity(0.04)],
-                center: .center,
-                startRadius: 70,
-                endRadius: 700
-            )
-            RadialGradient(
-                colors: [Color(red: 0.78, green: 0.86, blue: 0.65).opacity(0.32), .clear],
-                center: .bottomTrailing,
-                startRadius: 70,
-                endRadius: 500
-            )
-        }
-    }
 }
 
 private struct RestoringSessionView: View {
     var body: some View {
         ZStack {
-            AegisColors.appBackground
+            AdaptiveAppBackground()
             ProgressView()
                 .controlSize(.large)
         }
@@ -85,7 +60,7 @@ private struct LoginView: View {
                 wideLayout(layout)
             }
         }
-        .background(Color.white.ignoresSafeArea())
+        .background(AegisColors.loginBackground.ignoresSafeArea())
         .ignoresSafeArea()
     }
 
@@ -123,7 +98,7 @@ private struct LoginView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Welcome to Aegis")
                 .font(.system(size: 31, weight: .bold))
-                .foregroundStyle(.black)
+                .foregroundStyle(AegisColors.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.9)
                 .padding(.bottom, 12)
@@ -157,7 +132,7 @@ private struct LoginView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(AegisColors.teal)
-                        .shadow(color: Color.black.opacity(0.20), radius: 4, x: 0, y: 2)
+                        .shadow(color: AegisColors.adaptiveCardShadow, radius: 4, x: 0, y: 2)
 
                     if viewModel.isSigningIn {
                         ProgressView()
@@ -268,10 +243,10 @@ private struct LoginInputField: View {
         .padding(.horizontal, 18)
         .frame(maxWidth: .infinity)
         .frame(height: 46)
-        .background(Color.white)
+        .background(AegisColors.inputBackground)
         .overlay {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .stroke(Color.black.opacity(0.18), lineWidth: 1)
+                .stroke(AegisColors.border, lineWidth: 1)
         }
     }
 }
@@ -295,10 +270,10 @@ private struct LoginSecureField: View {
         .padding(.horizontal, 18)
         .frame(maxWidth: .infinity)
         .frame(height: 46)
-        .background(Color.white)
+        .background(AegisColors.inputBackground)
         .overlay {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .stroke(Color.black.opacity(0.18), lineWidth: 1)
+                .stroke(AegisColors.border, lineWidth: 1)
         }
     }
 }
@@ -323,7 +298,7 @@ private struct AdminShellView: View {
             .frame(width: 214)
 
             ZStack {
-                AegisColors.appBackground
+                AdaptiveAppBackground()
                 activeScreen
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -401,10 +376,10 @@ private struct SidebarView: View {
             }
             .buttonStyle(.plain)
         }
-        .background(Color.white)
+        .background(AegisColors.surfaceSolid)
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(Color.black.opacity(0.08))
+                .fill(AegisColors.border)
                 .frame(width: 1)
         }
     }
@@ -579,7 +554,7 @@ private struct DashboardView: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(AegisColors.teal)
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color.white))
+                    .background(Circle().fill(AegisColors.inputBackground))
             }
             .menuStyle(.borderlessButton)
             .onChange(of: viewModel.sessionFilter) { _, _ in
@@ -645,9 +620,9 @@ private struct SummaryCard<Content: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 24)
             .padding(.vertical, 22)
-            .background(Color.white.opacity(0.94))
+            .background(AegisColors.surface)
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .shadow(color: AegisColors.cardShadow, radius: 5, x: 0, y: 2)
+            .shadow(color: AegisColors.adaptiveCardShadow, radius: 5, x: 0, y: 2)
     }
 }
 
@@ -662,7 +637,7 @@ private struct SummaryMetric: View {
                 .foregroundStyle(AegisColors.mutedText)
             Text(value)
                 .font(.system(size: 31, weight: .bold))
-                .foregroundStyle(.black)
+                .foregroundStyle(AegisColors.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -701,7 +676,7 @@ private struct AttendanceTable: View {
                             }
                             .frame(height: 46)
                             .overlay(alignment: .bottom) {
-                                Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                                Rectangle().fill(AegisColors.border).frame(height: 1)
                             }
                         }
                     }
@@ -821,7 +796,7 @@ private struct LiveRadarView: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(AegisColors.teal)
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(Color.white))
+                .background(Circle().fill(AegisColors.inputBackground))
         }
     }
 
@@ -894,7 +869,7 @@ private struct RoomTab: View {
                 .frame(width: 108, height: 32)
                 .background {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isSelected ? AegisColors.teal : Color.white.opacity(0.92))
+                        .fill(isSelected ? AegisColors.teal : AegisColors.surface)
                 }
         }
         .buttonStyle(.plain)
@@ -1061,7 +1036,7 @@ private struct OccupantsTable: View {
                             }
                             .frame(height: 46)
                             .overlay(alignment: .bottom) {
-                                Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                                Rectangle().fill(AegisColors.border).frame(height: 1)
                             }
                         }
                     }
@@ -1220,13 +1195,13 @@ private struct SettingsSubpanel<Content: View>: View {
             content
         }
         .padding(20)
-        .background(Color.white.opacity(0.78))
+        .background(AegisColors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(AegisColors.panelBorder, lineWidth: 1)
+                .stroke(AegisColors.border, lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+        .shadow(color: AegisColors.adaptiveCardShadow, radius: 4, x: 0, y: 2)
     }
 }
 
@@ -1303,13 +1278,13 @@ struct WhitePanel<Content: View>: View {
     var body: some View {
         content
             .padding(20)
-            .background(Color.white.opacity(0.94))
+            .background(AegisColors.surface)
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(Color.white.opacity(0.85), lineWidth: 1)
+                    .stroke(AegisColors.border, lineWidth: 1)
             }
-            .shadow(color: AegisColors.cardShadow, radius: 5, x: 0, y: 2)
+            .shadow(color: AegisColors.adaptiveCardShadow, radius: 5, x: 0, y: 2)
     }
 }
 
@@ -1323,10 +1298,10 @@ private struct DateChip: View {
             Image(systemName: "chevron.down")
         }
         .font(.system(size: 13, weight: .bold))
-        .foregroundStyle(.black)
+        .foregroundStyle(AegisColors.text)
         .padding(.horizontal, 13)
         .frame(height: 34)
-        .background(Color.white.opacity(0.94))
+        .background(AegisColors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 }
@@ -1345,7 +1320,7 @@ struct SearchField: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 30)
-        .background(Color.white)
+        .background(AegisColors.inputBackground)
         .clipShape(Capsule())
     }
 }
@@ -1389,12 +1364,12 @@ private struct MetricCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(AegisColors.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Text(value)
                     .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(AegisColors.text)
                 if let caption {
                     Text(caption)
                         .font(.system(size: 10, weight: .semibold))
@@ -1405,7 +1380,7 @@ private struct MetricCard: View {
         }
         .padding(.horizontal, 23)
         .frame(height: 104)
-        .background(Color.white.opacity(0.94))
+        .background(AegisColors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 }
@@ -1433,7 +1408,7 @@ struct TableHeader: View {
             ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
                 Text(column.0)
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(AegisColors.text)
                     .frame(
                         minWidth: column.1 == .infinity ? 0 : column.1,
                         maxWidth: column.1 == .infinity ? .infinity : column.1,
@@ -1443,7 +1418,7 @@ struct TableHeader: View {
         }
         .padding(.horizontal, 13)
         .frame(height: 42)
-        .background(AegisColors.tableHeader)
+        .background(AegisColors.tableHeaderBg)
     }
 }
 
@@ -1481,7 +1456,7 @@ extension View {
     func screenTitle() -> some View {
         self
             .font(.system(size: 27, weight: .bold))
-            .foregroundStyle(.black)
+            .foregroundStyle(AegisColors.text)
     }
 
     func screenPadding() -> some View {

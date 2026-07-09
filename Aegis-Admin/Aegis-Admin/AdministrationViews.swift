@@ -366,7 +366,7 @@ private struct AdministrationToolbar: View {
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(AegisColors.teal)
                             .frame(width: 30, height: 30)
-                            .background(Circle().fill(Color.white))
+                            .background(Circle().fill(AegisColors.inputBackground))
                     }
                     .buttonStyle(.plain)
                     .help("Apply filters")
@@ -456,7 +456,7 @@ private struct BeaconManagementToolbar: View {
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(AegisColors.teal)
                             .frame(width: 30, height: 30)
-                            .background(Circle().fill(Color.white))
+                            .background(Circle().fill(AegisColors.inputBackground))
                     }
                     .buttonStyle(.plain)
                     .help("Apply filters")
@@ -586,7 +586,7 @@ private struct AdminModePill: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(isSelected ? Color.white : AegisColors.teal)
                 .frame(width: 138, height: 30)
-                .background(isSelected ? AegisColors.teal : Color.white.opacity(0.92))
+                .background(isSelected ? AegisColors.teal : AegisColors.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -639,7 +639,7 @@ private struct AdminRoomsTable: View {
                     }
                     .frame(height: 48)
                     .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                        Rectangle().fill(AegisColors.border).frame(height: 1)
                     }
                 }
             }
@@ -698,7 +698,7 @@ private struct AdminBeaconsTable: View {
                     }
                     .frame(height: 48)
                     .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                        Rectangle().fill(AegisColors.border).frame(height: 1)
                     }
                 }
             }
@@ -785,7 +785,7 @@ private struct AdminUsersTable: View {
                     }
                     .frame(height: 48)
                     .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                        Rectangle().fill(AegisColors.border).frame(height: 1)
                     }
                 }
             }
@@ -809,7 +809,7 @@ private struct IconActionButton: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
-                .background(Color.white.opacity(0.82))
+                .background(AegisColors.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -1300,7 +1300,7 @@ struct ReportsView: View {
                     .foregroundStyle(AegisColors.teal)
                     .padding(.horizontal, 16)
                     .frame(height: 34)
-                    .background(Color.white)
+                    .background(AegisColors.inputBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -1471,16 +1471,16 @@ private struct ReportLearnersTable: View {
                         Text(learner.session).tableCell(width: 90)
                         Text("\(learner.present)").tableCell(width: 90)
                         Text("\(learner.late)")
-                            .foregroundStyle(learner.late > 0 ? AegisColors.inactiveYellow : .black)
+                            .foregroundStyle(learner.late > 0 ? AegisColors.inactiveYellow : AegisColors.text)
                             .tableCell(width: 80)
                         Text("\(learner.absent)")
-                            .foregroundStyle(learner.absent > 0 ? Color.red : .black)
+                            .foregroundStyle(learner.absent > 0 ? Color.red : AegisColors.text)
                             .tableCell(width: 90)
                         Text(formatRatePercent(learner.attendanceRate)).tableCell(width: 90)
                     }
                     .frame(height: 44)
                     .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+                        Rectangle().fill(AegisColors.border).frame(height: 1)
                     }
                 }
             }
@@ -1499,15 +1499,15 @@ private struct RollupMetric: View {
                 .foregroundStyle(AegisColors.mutedText)
             Text(value)
                 .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(.black)
+                .foregroundStyle(AegisColors.text)
         }
         .padding(16)
         .frame(width: 150, alignment: .leading)
-        .background(Color.white.opacity(0.78))
+        .background(AegisColors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(AegisColors.panelBorder, lineWidth: 1)
+                .stroke(AegisColors.border, lineWidth: 1)
         }
     }
 }

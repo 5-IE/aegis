@@ -18,7 +18,7 @@ struct HomeView: View {
                 // Greeting header
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(Color(red: 0.72, green: 0.74, blue: 0.74))
+                        .fill(Theme.textSecondary.opacity(0.6))
                         .frame(width: 58, height: 58)
                         .overlay(
                             Image(systemName: "person.fill")
@@ -53,7 +53,7 @@ struct HomeView: View {
                 }
                 .background(Theme.cardBackground)
                 .cornerRadius(10)
-                .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)
+                .shadow(color: Theme.cardShadow, radius: 6, x: 0, y: 3)
  
                 // Today's Attendance
                 VStack(alignment: .leading, spacing: 8) {
@@ -99,7 +99,7 @@ struct HomeView: View {
                     .padding(.vertical, 6)
                     .background(Theme.cardBackground)
                     .cornerRadius(10)
-                    .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)
+                    .shadow(color: Theme.cardShadow, radius: 6, x: 0, y: 3)
                 }
             }
             .padding(.horizontal, 14)
