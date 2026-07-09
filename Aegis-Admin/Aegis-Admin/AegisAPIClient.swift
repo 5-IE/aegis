@@ -556,6 +556,20 @@ struct AdminUserUpdateRequest: Encodable {
         case firstName = "first_name"
         case lastName = "last_name"
     }
+
+    // first_name/last_name are nullable in the backend patch schema: an
+    // explicit JSON null clears the value, an absent key leaves it
+    // unchanged. Emptying the field in the form must clear, so encode
+    // null rather than omitting. session is optional but NOT nullable
+    // (enum AM/PM), so a nil session stays omitted.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(email, forKey: .email)
+        try container.encode(role, forKey: .role)
+        try container.encodeIfPresent(session, forKey: .session)
+        try container.encode(firstName, forKey: .firstName)
+        try container.encode(lastName, forKey: .lastName)
+    }
 }
 
 struct AdminPasswordResetRequest: Encodable {
