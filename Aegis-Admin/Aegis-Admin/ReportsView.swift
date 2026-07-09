@@ -4,113 +4,289 @@ struct ReportsView: View {
     @ObservedObject var viewModel: ReportsViewModel
     @ObservedObject var sessionStore: SessionStore
 
+    @State private var scope: ReportScope = .allLearners
+    @State private var period: ReportPeriod = .dateRange
+    @State private var fromMonth = Date()
+    @State private var toMonth = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+    @State private var attendanceStatus = "All Status"
+    @State private var exportFormat = "Export as PDF"
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 28) {
                 Text("Reports")
-                    .screenTitle()
+                    .aegisH1()
 
-                WhitePanel {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Label("Generate Attendance Rollup", systemImage: "doc.text.fill")
-                            .font(.system(size: 16, weight: .bold))
-
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .top, spacing: 28) {
-                                reportFields
-                                reportResult
-                                Spacer()
-                            }
-
-                            VStack(alignment: .leading, spacing: 18) {
-                                reportFields
-                                reportResult
-                            }
-                        }
-
-                        HStack {
-                            Spacer()
-                            Button {
-                                Task { await viewModel.runRollup(sessionStore: sessionStore) }
-                            } label: {
-                                Label(viewModel.isRunning ? "Running..." : "Run Rollup", systemImage: "arrow.clockwise")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 16)
-                                    .frame(height: 34)
-                                    .background(AegisColors.teal)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(viewModel.isRunning)
-                        }
-
-                        if case let .failed(message) = viewModel.state {
-                            ErrorBanner(message: message)
-                        }
-                    }
-                }
-                .frame(maxWidth: 760, alignment: .leading)
-
-                Spacer(minLength: 0)
+                reportPanel
             }
             .screenPadding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private var reportFields: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            FormTextField(title: "Date", text: $viewModel.dateText)
-                .frame(width: 190)
-            FormTextField(title: "User ID", text: $viewModel.userIDText)
-                .frame(width: 190)
+    private var reportPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Label("Generate Attendance Report", systemImage: "clipboard")
+                .aegisH2()
+                .padding(.horizontal, 38)
+                .frame(height: 76)
+
+            Divider()
+
+            scopeSection
+                .padding(.horizontal, 38)
+                .frame(height: 112)
+
+            Divider()
+
+            periodSection
+                .padding(.horizontal, 38)
+                .frame(minHeight: 184)
+
+            Divider()
+
+            exportSection
+                .padding(38)
+        }
+        .background(AegisColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.indigo.opacity(0.78), lineWidth: 3)
         }
     }
 
-    private var reportResult: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 14) {
-                    RollupMetric(title: "Processed", value: "\(viewModel.result?.processed ?? 0)")
-                    RollupMetric(title: "Leave Skipped", value: "\(viewModel.result?.skippedLeave ?? 0)")
+    private var scopeSection: some View {
+        HStack(alignment: .center) {
+            sectionDescription(
+                title: "Report Scope",
+                subtitle: "Choose whose attendance data you want to include"
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 54) {
+                radioOption("All learners", value: ReportScope.allLearners, selection: $scope)
+                radioOption("Individual", value: ReportScope.individual, selection: $scope)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var periodSection: some View {
+        HStack(alignment: .top) {
+            sectionDescription(
+                title: "Period",
+                subtitle: "Choose the time period for your report"
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 30)
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 54) {
+                    radioOption("Single Month", value: ReportPeriod.singleMonth, selection: $period)
+                    radioOption("Date Range", value: ReportPeriod.dateRange, selection: $period)
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    RollupMetric(title: "Processed", value: "\(viewModel.result?.processed ?? 0)")
-                    RollupMetric(title: "Leave Skipped", value: "\(viewModel.result?.skippedLeave ?? 0)")
+                Text(period == .dateRange ? "Select a start and end month" : "Select a month")
+                    .font(AegisTypography.caption)
+                    .foregroundStyle(AegisColors.mutedText)
+                    .padding(.leading, period == .dateRange ? 264 : 0)
+
+                if period == .singleMonth {
+                    monthSelector(title: "Month", date: $fromMonth)
+                        .frame(width: 230)
+                } else {
+                    HStack(spacing: 42) {
+                        monthSelector(title: "From", date: $fromMonth)
+                        monthSelector(title: "To", date: $toMonth)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 28)
+        }
+    }
 
-            if let message = viewModel.message {
-                Text(message)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(message == "Rollup completed" ? AegisColors.activeGreen : Color.red)
+    private var exportSection: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            HStack(spacing: 70) {
+                reportMenu(title: "Attendance Status", selection: $attendanceStatus, options: [
+                    "All Status", "On-time", "Late", "Leave"
+                ])
+                reportMenu(title: "Export Format", selection: $exportFormat, options: [
+                    "Export as PDF", "Export as CSV"
+                ])
             }
+
+            HStack {
+                if let message = viewModel.message {
+                    Text(message)
+                        .font(AegisTypography.caption)
+                        .foregroundStyle(message == "Rollup completed" ? AegisColors.activeGreen : .red)
+                }
+
+                Spacer()
+
+                Button {
+                    prepareRequest()
+                    Task { await viewModel.runRollup(sessionStore: sessionStore) }
+                } label: {
+                    Label(
+                        viewModel.isRunning ? "Generating..." : "Download Report",
+                        systemImage: "square.and.arrow.down"
+                    )
+                    .font(AegisTypography.b2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .frame(height: 40)
+                    .background { AegisButtonBackground() }
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.isRunning)
+            }
+
+            if case let .failed(message) = viewModel.state {
+                ErrorBanner(message: message)
+            }
+        }
+    }
+
+    private func sectionDescription(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .aegisH2()
+                .foregroundStyle(AegisColors.teal)
+            Text(subtitle)
+                .font(AegisTypography.caption)
+                .foregroundStyle(AegisColors.mutedText)
+        }
+    }
+
+    private func radioOption<Value: Hashable>(
+        _ title: String,
+        value: Value,
+        selection: Binding<Value>
+    ) -> some View {
+        Button {
+            selection.wrappedValue = value
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .stroke(
+                            selection.wrappedValue == value ? AegisColors.teal : Color.gray.opacity(0.65),
+                            lineWidth: 2
+                        )
+                    if selection.wrappedValue == value {
+                        Circle()
+                            .fill(AegisColors.teal)
+                            .padding(5)
+                    }
+                }
+                .frame(width: 20, height: 20)
+
+                Text(title)
+                    .font(AegisTypography.b2)
+                    .foregroundStyle(.black)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func monthSelector(title: String, date: Binding<Date>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(AegisTypography.caption)
+
+            Menu {
+                ForEach(monthChoices, id: \.self) { choice in
+                    Button(monthText(choice)) {
+                        date.wrappedValue = choice
+                    }
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "calendar")
+                    Text(monthText(date.wrappedValue))
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                }
+                .font(AegisTypography.b2)
+                .foregroundStyle(.black)
+                .padding(.horizontal, 13)
+                .frame(height: 38)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Color.gray.opacity(0.55), lineWidth: 1)
+                }
+            }
+            .menuStyle(.borderlessButton)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func reportMenu(title: String, selection: Binding<String>, options: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .aegisH2()
+                .foregroundStyle(AegisColors.teal)
+
+            Menu {
+                ForEach(options, id: \.self) { option in
+                    Button(option) {
+                        selection.wrappedValue = option
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(selection.wrappedValue)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                }
+                .font(AegisTypography.b2)
+                .foregroundStyle(.black)
+                .padding(.horizontal, 12)
+                .frame(height: 38)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Color.gray.opacity(0.55), lineWidth: 1)
+                }
+            }
+            .menuStyle(.borderlessButton)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var monthChoices: [Date] {
+        (-12...12).compactMap {
+            Calendar.current.date(byAdding: .month, value: $0, to: Date())
+        }
+    }
+
+    private func monthText(_ date: Date) -> String {
+        date.formatted(.dateTime.month(.wide).year())
+    }
+
+    private func prepareRequest() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-01"
+        viewModel.dateText = formatter.string(from: fromMonth)
+        if scope == .allLearners {
+            viewModel.userIDText = ""
         }
     }
 }
 
-private struct RollupMetric: View {
-    let title: String
-    let value: String
+private enum ReportScope: Hashable {
+    case allLearners
+    case individual
+}
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AegisColors.mutedText)
-            Text(value)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(.black)
-        }
-        .padding(16)
-        .frame(width: 150, alignment: .leading)
-        .background(AegisColors.surfaceAlt)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(AegisColors.panelBorder, lineWidth: 1)
-        }
-    }
+private enum ReportPeriod: Hashable {
+    case singleMonth
+    case dateRange
 }

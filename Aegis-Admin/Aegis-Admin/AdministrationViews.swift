@@ -77,134 +77,24 @@ struct AdministrationView: View {
     private var activeAdministrationPanel: some View {
         switch viewModel.selectedMode {
         case .users:
-            usersPanel
+            UserManagementView(
+                viewModel: viewModel,
+                sessionStore: sessionStore,
+                userForm: $userForm
+            )
         case .rooms:
-            roomsPanel
+            RoomManagementView(
+                viewModel: viewModel,
+                roomForm: $roomForm,
+                roomDeleteTarget: $roomDeleteTarget
+            )
         case .beacons:
-            beaconsPanel
-        }
-    }
-
-    private var usersPanel: some View {
-        WhitePanel {
-            VStack(alignment: .leading, spacing: 16) {
-                AdministrationToolbar(
-                    searchText: $viewModel.searchText,
-                    applyFilters: {
-                        Task { await viewModel.applyFilters(sessionStore: sessionStore) }
-                    },
-                    addUser: {
-                        userForm = AdminUserForm()
-                    }
-                )
-
-                AdaptiveHorizontalTable(
-                    minWidth: 760,
-                    rowCount: viewModel.users.count,
-                    state: viewModel.state
-                ) {
-                    AdminUsersTable(
-                        rows: viewModel.users,
-                        state: viewModel.state,
-                        edit: { userForm = AdminUserForm(user: $0) }
-                    )
-                }
-
-                AdminPaginationFooter(
-                    summary: viewModel.pageSummary,
-                    message: viewModel.actionMessage,
-                    successWords: ["User", "Password"],
-                    canGoPrevious: viewModel.canGoPrevious,
-                    canGoNext: viewModel.canGoNext,
-                    previous: {
-                        Task { await viewModel.previousPage(sessionStore: sessionStore) }
-                    },
-                    next: {
-                        Task { await viewModel.nextPage(sessionStore: sessionStore) }
-                    }
-                )
-            }
-        }
-    }
-
-    private var roomsPanel: some View {
-        WhitePanel {
-            VStack(alignment: .leading, spacing: 16) {
-                RoomManagementToolbar {
-                    roomForm = AdminRoomForm()
-                }
-
-                AdaptiveHorizontalTable(
-                    minWidth: 720,
-                    rowCount: viewModel.rooms.count,
-                    state: viewModel.roomState
-                ) {
-                    AdminRoomsTable(
-                        rows: viewModel.rooms,
-                        state: viewModel.roomState,
-                        beaconCount: { viewModel.beaconCount(for: $0) },
-                        beaconStatus: { viewModel.beaconStatus(for: $0) },
-                        edit: { roomForm = AdminRoomForm(room: $0) },
-                        delete: { roomDeleteTarget = $0 }
-                    )
-                }
-
-                AdminPaginationFooter(
-                    summary: "Showing \(viewModel.rooms.count) rooms",
-                    message: viewModel.roomActionMessage,
-                    successWords: ["Room"],
-                    canGoPrevious: false,
-                    canGoNext: false,
-                    previous: {},
-                    next: {}
-                )
-            }
-        }
-    }
-
-    private var beaconsPanel: some View {
-        WhitePanel {
-            VStack(alignment: .leading, spacing: 16) {
-                BeaconManagementToolbar(
-                    searchText: $viewModel.beaconSearchText,
-                    assignmentFilter: $viewModel.beaconAssignmentFilter,
-                    roomFilterID: $viewModel.beaconRoomFilterID,
-                    rooms: viewModel.rooms,
-                    applyFilters: {
-                        Task { await viewModel.applyBeaconFilters(sessionStore: sessionStore) }
-                    },
-                    addBeacon: {
-                        beaconForm = AdminBeaconForm()
-                    }
-                )
-
-                AdaptiveHorizontalTable(
-                    minWidth: 820,
-                    rowCount: viewModel.filteredBeacons.count,
-                    state: viewModel.beaconState
-                ) {
-                    AdminBeaconsTable(
-                        rows: viewModel.filteredBeacons,
-                        state: viewModel.beaconState,
-                        edit: { beaconForm = AdminBeaconForm(beacon: $0) },
-                        delete: { beaconDeleteTarget = $0 }
-                    )
-                }
-
-                AdminPaginationFooter(
-                    summary: viewModel.beaconPageSummary,
-                    message: viewModel.beaconActionMessage,
-                    successWords: ["Beacon"],
-                    canGoPrevious: viewModel.canGoPreviousBeaconPage,
-                    canGoNext: viewModel.canGoNextBeaconPage,
-                    previous: {
-                        Task { await viewModel.previousBeaconPage(sessionStore: sessionStore) }
-                    },
-                    next: {
-                        Task { await viewModel.nextBeaconPage(sessionStore: sessionStore) }
-                    }
-                )
-            }
+            BeaconManagementView(
+                viewModel: viewModel,
+                sessionStore: sessionStore,
+                beaconForm: $beaconForm,
+                beaconDeleteTarget: $beaconDeleteTarget
+            )
         }
     }
 }
@@ -331,7 +221,7 @@ private struct AdministrationAlerts: ViewModifier {
     }
 }
 
-private struct AdministrationToolbar: View {
+struct AdministrationToolbar: View {
     @Binding var searchText: String
     let applyFilters: () -> Void
     let addUser: () -> Void
@@ -364,7 +254,7 @@ private struct AdministrationToolbar: View {
     }
 }
 
-private struct RoomManagementToolbar: View {
+struct RoomManagementToolbar: View {
     let addRoom: () -> Void
 
     var body: some View {
@@ -389,7 +279,7 @@ private struct RoomManagementToolbar: View {
     }
 }
 
-private struct BeaconManagementToolbar: View {
+struct BeaconManagementToolbar: View {
     @Binding var searchText: String
     @Binding var assignmentFilter: BeaconAssignmentFilter
     @Binding var roomFilterID: Int?
@@ -455,7 +345,7 @@ private struct BeaconManagementToolbar: View {
     }
 }
 
-private struct AdminPaginationFooter: View {
+struct AdminPaginationFooter: View {
     let summary: String
     let message: String?
     let successWords: [String]
@@ -505,7 +395,7 @@ private struct AdminPaginationFooter: View {
     }
 }
 
-private struct AdaptiveHorizontalTable<Content: View>: View {
+struct AdaptiveHorizontalTable<Content: View>: View {
     let minWidth: CGFloat
     let rowCount: Int
     let state: LoadState
@@ -566,7 +456,7 @@ private struct AdminModePill: View {
     }
 }
 
-private struct AdminRoomsTable: View {
+struct AdminRoomsTable: View {
     let rows: [Room]
     let state: LoadState
     let beaconCount: (Room) -> Int
@@ -621,7 +511,7 @@ private struct AdminRoomsTable: View {
     }
 }
 
-private struct AdminBeaconsTable: View {
+struct AdminBeaconsTable: View {
     let rows: [AdminBeacon]
     let state: LoadState
     let edit: (AdminBeacon) -> Void
@@ -679,7 +569,7 @@ private struct AdminBeaconsTable: View {
     }
 }
 
-private struct AdminUsersTable: View {
+struct AdminUsersTable: View {
     let rows: [AdminUser]
     let state: LoadState
     let edit: (AdminUser) -> Void
