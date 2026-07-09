@@ -25,6 +25,7 @@ struct AdministrationView: View {
                 roomForm: $roomForm,
                 roomDeleteTarget: $roomDeleteTarget,
                 beaconForm: $beaconForm,
+                beaconDeleteTarget: $beaconDeleteTarget,
                 viewModel: viewModel,
                 sessionStore: sessionStore
             ))
@@ -106,6 +107,7 @@ private struct AdministrationSheets: ViewModifier {
     @Binding var roomForm: AdminRoomForm?
     @Binding var roomDeleteTarget: Room?
     @Binding var beaconForm: AdminBeaconForm?
+    @Binding var beaconDeleteTarget: AdminBeacon?
     @ObservedObject var viewModel: AdministrationViewModel
     @ObservedObject var sessionStore: SessionStore
 
@@ -142,9 +144,19 @@ private struct AdministrationSheets: ViewModifier {
                 )
             }
             .sheet(item: $beaconForm) { form in
-                AdminBeaconFormSheet(form: form, rooms: viewModel.rooms, isSaving: viewModel.isSaving) { draft in
-                    await viewModel.saveBeacon(form: draft, sessionStore: sessionStore)
-                }
+                AdminBeaconFormSheet(
+                    form: form,
+                    rooms: viewModel.rooms,
+                    isSaving: viewModel.isSaving,
+                    onSave: { draft in
+                        await viewModel.saveBeacon(form: draft, sessionStore: sessionStore)
+                    },
+                    onDelete: {
+                        beaconDeleteTarget = viewModel.beacons.first {
+                            $0.id == form.beaconID
+                        }
+                    }
+                )
             }
     }
 }
@@ -288,59 +300,28 @@ struct BeaconManagementToolbar: View {
     let addBeacon: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Label("Beacon Management", systemImage: "sensor.tag.radiowaves.forward.fill")
-                    .font(.system(size: 16, weight: .bold))
+        HStack(spacing: 12) {
+            Label("Beacon Management", systemImage: "sensor.fill")
+                .font(.system(size: 16, weight: .bold))
 
-                Spacer()
+            Spacer()
 
-                Button(action: addBeacon) {
-                    Label("Register New Beacon", systemImage: "plus")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 13)
-                        .frame(height: 30)
-                        .background(AegisColors.teal)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            SearchField(text: $searchText, placeholder: "Search...")
+                .frame(width: 220)
+                .onSubmit {
+                    applyFilters()
                 }
-                .buttonStyle(.plain)
+
+            Button(action: addBeacon) {
+                Label("Register New Beacon", systemImage: "plus")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 13)
+                    .frame(height: 30)
+                    .background(AegisColors.teal)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    SearchField(text: $searchText, placeholder: "Search...")
-                        .frame(width: 220)
-
-                    Picker("Assignment", selection: $assignmentFilter) {
-                        ForEach(BeaconAssignmentFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(filter)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 136)
-
-                    Picker("Room", selection: $roomFilterID) {
-                        Text("All Rooms").tag(Optional<Int>.none)
-                        ForEach(rooms) { room in
-                            Text(room.name).tag(Optional(room.id))
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 160)
-
-                    Button(action: applyFilters) {
-                        Image(systemName: "line.3.horizontal.decrease")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(AegisColors.teal)
-                            .frame(width: 30, height: 30)
-                            .background(Circle().fill(Color.white))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Apply filters")
-                }
-                .padding(.bottom, 1)
-            }
+            .buttonStyle(.plain)
         }
     }
 }
@@ -541,16 +522,11 @@ struct AdminBeaconsTable: View {
                             .foregroundStyle(beacon.roomID == nil ? AegisColors.mutedText : AegisColors.activeGreen)
                             .tableCell(width: 118)
 
-                        HStack(spacing: 8) {
+                        HStack {
                             IconActionButton(symbol: "pencil", tint: Color.blue) {
                                 edit(beacon)
                             }
                             .help("Edit beacon")
-
-                            IconActionButton(symbol: "trash", tint: Color.red) {
-                                delete(beacon)
-                            }
-                            .help("Delete beacon")
                         }
                         .frame(width: 110)
                     }
@@ -637,7 +613,6 @@ private struct IconActionButton: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
-                .background(Color.white.opacity(0.82))
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -990,80 +965,146 @@ private struct AdminRoomFormSheet: View {
 private struct AdminBeaconFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AdminBeaconForm
+
     let rooms: [Room]
     let isSaving: Bool
     let onSave: (AdminBeaconForm) async -> Bool
-
-    init(form: AdminBeaconForm, rooms: [Room], isSaving: Bool, onSave: @escaping (AdminBeaconForm) async -> Bool) {
+    let onDelete: () -> Void
+    
+    init(
+        form: AdminBeaconForm,
+        rooms: [Room],
+        isSaving: Bool,
+        onSave: @escaping (AdminBeaconForm) async -> Bool,
+        onDelete: @escaping () -> Void
+    ) {
         self._draft = State(initialValue: form)
         self.rooms = rooms
         self.isSaving = isSaving
         self.onSave = onSave
+        self.onDelete = onDelete
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(draft.title)
-                .font(.system(size: 18, weight: .bold))
-                .padding(.horizontal, 24)
-                .padding(.vertical, 18)
+
+            // MARK: Header
+            HStack {
+                Text(draft.title)
+                    .aegisH2()
+
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(AegisTypography.h2)
+                        .foregroundStyle(.black)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 18)
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Beacon Details")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AegisColors.teal)
+            // MARK: Form
+            VStack(alignment: .leading, spacing: 24) {
 
-                HStack(spacing: 14) {
-                    FormTextField(title: "Beacon Name", text: $draft.name)
-                    FormTextField(title: "Beacon ID / Serial Number", text: $draft.beaconIdentifier)
+                Text("Beacon Details")
+                    .font(AegisTypography.b2.weight(.semibold))
+
+                // MARK: - Row 1
+                HStack(alignment: .top, spacing: 48) {
+
+                    FormTextField(
+                        title: "Beacon ID",
+                        text: $draft.beaconIdentifier
+                    )
+                    .frame(maxWidth: .infinity)
+
+                    VStack(alignment: .leading, spacing: 6) {
+
+                        Text("Location")
+                            .font(AegisTypography.caption)
+                            .foregroundStyle(AegisColors.mutedText)
+
+                        Picker("", selection: .constant("North Wing")) {
+                            Text("North Wing").tag("North Wing")
+                            Text("South Wing").tag("South Wing")
+                        }
+                        .labelsHidden()
+                        .frame(width: 260)
+                    }
+                    .frame(width: 260, alignment: .leading)
                 }
 
+                // MARK: - Row 2
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Assigned Room")
-                        .font(.system(size: 11, weight: .bold))
+
+                    Text("Room Name")
+                        .font(AegisTypography.caption)
                         .foregroundStyle(AegisColors.mutedText)
-                    Picker("Assigned Room", selection: $draft.roomID) {
-                        Text("Unassigned").tag(Optional<Int>.none)
+
+                    Picker("", selection: $draft.roomID) {
+
+                        Text("Select Room")
+                            .tag(Optional<Int>.none)
+
                         ForEach(rooms) { room in
-                            Text(room.name).tag(Optional(room.id))
+                            Text(room.name)
+                                .tag(Optional(room.id))
                         }
                     }
                     .labelsHidden()
-                    .frame(width: 220)
+                    .frame(width: 260)
                 }
             }
             .padding(24)
 
-            Spacer(minLength: 0)
+            Spacer()
 
             Divider()
 
             HStack {
                 if draft.isEditing {
-                    Text("Set room to Unassigned to detach this beacon.")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(AegisColors.mutedText)
+                    Button {
+                        dismiss()
+                        onDelete()
+                    } label: {
+                        Label("Delete Beacon", systemImage: "trash")
+                            .font(AegisTypography.caption.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .frame(height: 36)
+                            .background(Color.red.opacity(0.82))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
                 }
+
                 Spacer()
+
                 Button("Cancel") {
                     dismiss()
                 }
-                .keyboardShortcut(.cancelAction)
 
-                Button(draft.submitTitle) {
+                Button {
                     Task {
                         if await onSave(draft) {
                             dismiss()
                         }
                     }
+                } label: {
+                    Text(draft.submitTitle)
+                        .frame(width: 180)
                 }
-                .keyboardShortcut(.defaultAction)
+                .buttonStyle(AegisPrimaryButtonStyle())
                 .disabled(!draft.canSubmit || isSaving)
             }
             .padding(16)
         }
-        .frame(width: 620, height: 340)
+        .frame(width: 690, height: 360)
     }
 }

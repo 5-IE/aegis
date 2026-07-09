@@ -3,19 +3,23 @@ import SwiftUI
 struct BeaconManagementView: View {
     @ObservedObject var viewModel: AdministrationViewModel
     @ObservedObject var sessionStore: SessionStore
+
     @Binding var beaconForm: AdminBeaconForm?
     @Binding var beaconDeleteTarget: AdminBeacon?
 
     var body: some View {
         WhitePanel {
             VStack(alignment: .leading, spacing: 16) {
+
                 BeaconManagementToolbar(
                     searchText: $viewModel.beaconSearchText,
                     assignmentFilter: $viewModel.beaconAssignmentFilter,
                     roomFilterID: $viewModel.beaconRoomFilterID,
                     rooms: viewModel.rooms,
                     applyFilters: {
-                        Task { await viewModel.applyBeaconFilters(sessionStore: sessionStore) }
+                        Task {
+                            await viewModel.applyBeaconFilters(sessionStore: sessionStore)
+                        }
                     },
                     addBeacon: {
                         beaconForm = AdminBeaconForm()
@@ -30,8 +34,12 @@ struct BeaconManagementView: View {
                     AdminBeaconsTable(
                         rows: viewModel.filteredBeacons,
                         state: viewModel.beaconState,
-                        edit: { beaconForm = AdminBeaconForm(beacon: $0) },
-                        delete: { beaconDeleteTarget = $0 }
+                        edit: { beacon in
+                            beaconForm = AdminBeaconForm(beacon: beacon)
+                        },
+                        delete: { beacon in
+                            beaconDeleteTarget = beacon
+                        }
                     )
                 }
 
@@ -42,10 +50,14 @@ struct BeaconManagementView: View {
                     canGoPrevious: viewModel.canGoPreviousBeaconPage,
                     canGoNext: viewModel.canGoNextBeaconPage,
                     previous: {
-                        Task { await viewModel.previousBeaconPage(sessionStore: sessionStore) }
+                        Task {
+                            await viewModel.previousBeaconPage(sessionStore: sessionStore)
+                        }
                     },
                     next: {
-                        Task { await viewModel.nextBeaconPage(sessionStore: sessionStore) }
+                        Task {
+                            await viewModel.nextBeaconPage(sessionStore: sessionStore)
+                        }
                     }
                 )
             }
