@@ -65,7 +65,8 @@ Manual attendance is slow, error-prone, and gameable. Students can sign a sheet 
 - Dashboard: today's attendance status (derived from API), total attendance / late / leave counts
 - Attendance history with month/year filter
 - Sign-out
-- **Planned:** CoreLocation beacon detection → automatic presence reporting (the send/sign/ingest path is built; the sensing trigger is not)
+- CoreLocation beacon detection and automatic presence reporting (BLE region monitoring + ranging, beacon-to-room mapping from server, throttled signed POST /presence)
+- Sentry crash/error monitoring
 
 ### 5.5 Admin App (macOS)
 
@@ -118,9 +119,7 @@ Manual attendance is slow, error-prone, and gameable. Students can sign a sheet 
 
 | Item | Status |
 |------|--------|
-| CoreLocation beacon detection on the learner app | Planned — the main remaining work for end-to-end passive attendance |
-| On-device trilateration for position_x/y | Planned |
-| Cron job for nightly rollup | Trivial to add (script exists, just needs a crontab entry) |
+| On-device trilateration for position_x/y | Planned (currently single-beacon detection without position) |
 | HTTPS / TLS | Planned when exposing to internet |
 | Email-based password reset | Out of scope (admin resets passwords via CRUD) |
 | Self-service registration | Out of scope |
@@ -130,4 +129,4 @@ Manual attendance is slow, error-prone, and gameable. Students can sign a sheet 
 
 A learner walks into a classroom with their iPhone in their pocket. Within seconds, the admin's Live Radar shows them in the room. At end of day, the rollup marks them `early` or `late`. The learner sees "Checked In" on their dashboard. No one pressed anything.
 
-**Currently met except for the CoreLocation sensing trigger on the phone** — everything downstream (signing, ingestion, live status, rollup, admin visibility, learner dashboard) works end-to-end with synthetic or manually-triggered presence data.
+**Met end-to-end.** The learner app detects beacons, sends signed presence, the backend records it, the admin sees the dot on the Live Radar, and the rollup marks attendance. Remaining polish: position trilateration from multiple beacons (currently uses single-beacon detection without X/Y coordinates).
