@@ -9,6 +9,7 @@
 import SwiftUI
 
 struct RegisterView: View {
+    @Environment(DataStore.self) private var dataStore
     @StateObject private var viewModel = RegisterViewModel()
     
     var body: some View {
@@ -62,7 +63,9 @@ struct RegisterView: View {
                 } else {
                     VStack(spacing: 16) {
                         Button(action: {
-                            viewModel.registerDevice()
+                            Task {
+                                await viewModel.registerDevice(store: dataStore)
+                            }
                         }) {
                             HStack {
                                 if viewModel.isLoading {

@@ -36,6 +36,9 @@ struct HomeView: View {
                             .foregroundColor(Theme.primaryDark)
                     }
                     Spacer()
+                    Button("Logout", action: {
+                        dataStore.isLoggedIn = false
+                    })
                 }
  
                 // Stat cards

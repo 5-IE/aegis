@@ -35,6 +35,7 @@ class HomeViewModel: ObservableObject {
             await self.fetchProfile(store: dataStore)
             await self.fetchDashboardData(store: dataStore)
             await self.fetchAttendanceHistoryData(store: dataStore)
+            await self.fetchBeacons(store: dataStore)
         }
     }
     
@@ -85,6 +86,24 @@ class HomeViewModel: ObservableObject {
     }
     
     func fetchAttendanceHistoryData(store: DataStore) async {
+        isLoading = true
+        
+        do {
+            let response = try await store.fetchAttendanceHistory()
+            let attendanceHistoryData = response.list
+            
+            self.attendanceHistory = attendanceHistoryData.map { Attendance(from: $0) }
+            
+        } catch let error as ApiError {
+            self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
+        } catch {
+            self.errorMessage = "An unexpected error occurred."
+        }
+        
+        isLoading = false
+    }
+    
+    func fetchBeacons(store: DataStore) async {
         isLoading = true
         
         do {

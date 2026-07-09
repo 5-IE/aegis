@@ -61,6 +61,10 @@ class HttpService {
             print("\(httpResponse.statusCode) - \(url)")
         }
         
+        if httpResponse.statusCode == 204 {
+            return EmptyResponse() as! T
+        }
+        
         if httpResponse.statusCode == 401 && !isRetry {
             do {
                 if let apiService = self as? ApiServiceProtocol {
