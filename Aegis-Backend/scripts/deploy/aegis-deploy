@@ -27,8 +27,8 @@ echo "==> Running migrations..."
 sudo -u aegis bash -c "cd $BACKEND && npm run migrate"
 
 echo "==> Restarting service..."
-systemctl restart aegis-backend
+sudo systemctl restart aegis-backend
 sleep 2
-systemctl is-active aegis-backend
+sudo systemctl is-active aegis-backend
 curl -sf http://localhost:3000/health && echo
 echo "==> Deployed $(sudo -u aegis git -C "$REPO" log --oneline -1)"
