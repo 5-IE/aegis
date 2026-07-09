@@ -54,7 +54,7 @@ class HttpService {
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw ApiError(error: "internal_server_error", message: "Invalid response from server.")
+            throw ApiError(error: "internal_server_error", message: "Invalid response from server.", status: (response as! HTTPURLResponse).statusCode)
         }
         
         if let url = urlComponents.url {
@@ -84,7 +84,7 @@ class HttpService {
                 throw error
             } catch {
                 print(error.localizedDescription)
-                throw ApiError(error: "unauthorized", message: "Session expired. Please login again.")
+                throw ApiError(error: "unauthorized", message: "Session expired. Please login again.", status: httpResponse.statusCode)
             }
         }
         
@@ -106,13 +106,13 @@ class HttpService {
                 return try decoder.decode(T.self, from: data)
             } catch {
                 print("Decoding error: \(error)")
-                throw ApiError(error: "internal_server_error", message: "Failed to parse data from server")
+                throw ApiError(error: "internal_server_error", message: "Failed to parse data from server", status: httpResponse.statusCode)
             }
         } else {
             if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                throw ApiError(error: errorJson["error"] as? String, message: errorJson["message"] as? String)
+                throw ApiError(error: errorJson["error"] as? String, message: errorJson["message"] as? String, status: httpResponse.statusCode)
             } else {
-                throw ApiError(error: "internal_server_error", message: "Server error: \(httpResponse.statusCode)")
+                throw ApiError(error: "internal_server_error", message: "Server error: \(httpResponse.statusCode)", status: httpResponse.statusCode)
             }
         }
     }

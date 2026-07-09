@@ -35,6 +35,7 @@ class BackgroundLocationManager: NSObject, ObservableObject, CLLocationManagerDe
                     positionY: location.coordinate.longitude,
                     batteryLevel: 74
                 )
+                print("SEND LOCATION")
                 
                 try await Task.sleep(nanoseconds: 30 * 1_000_000_000)
                 

@@ -35,7 +35,7 @@ class DataStore {
         UserDefaults.standard.string(forKey: "aegis-refresh-token") != nil &&
         UserDefaults.standard.string(forKey: "aegis-access-token") != nil
         
-//        self.isRegistered = UserDefaults.standard.bool(forKey: "aegis-is-registered")
+        self.isRegistered = UserDefaults.standard.bool(forKey: "aegis-is-registered")
     }
     
     func loadInitialData() async {

@@ -14,6 +14,7 @@ struct EmptyResponse: Codable {}
 struct ApiError: Error {
     let error: String?
     let message: String?
+    let status: Int
 }
 
 struct ListResponse<T: Codable>: Codable {

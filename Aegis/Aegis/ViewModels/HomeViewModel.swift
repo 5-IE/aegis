@@ -21,6 +21,7 @@ class HomeViewModel: ObservableObject {
     @Published var leaveTaken: String = "00"
     @Published var checkedInAt: String = ""
     @Published var attendanceHistory: [Attendance] = []
+    @Published var beacons: [Beacon] = []
     
     // State Management
     var isLoading: Bool = false
@@ -107,10 +108,10 @@ class HomeViewModel: ObservableObject {
         isLoading = true
         
         do {
-            let response = try await store.fetchAttendanceHistory()
-            let attendanceHistoryData = response.list
+            let response = try await store.fetchBeacons()
+            let beaconsData = response.list
             
-            self.attendanceHistory = attendanceHistoryData.map { Attendance(from: $0) }
+            self.beacons = beaconsData
             
         } catch let error as ApiError {
             self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
