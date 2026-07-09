@@ -9,8 +9,8 @@ export const registerDeviceRouter = Router();
 registerDeviceRouter.post('/', requireAuth, requireRole('learner'), async (req, res, next) => {
   try {
     const { device_public_key } = req.body as { device_public_key?: unknown };
-    if (typeof device_public_key !== 'string' || device_public_key.length === 0 || device_public_key.length > 64) {
-      throw new AppError('invalid_request', 'device_public_key must be a non-empty string of at most 64 characters');
+    if (typeof device_public_key !== 'string' || device_public_key.length === 0 || device_public_key.length > 256) {
+      throw new AppError('invalid_request', 'device_public_key must be a non-empty string of at most 256 characters');
     }
     await updateDevicePublicKey(req.user!.id, device_public_key);
     res.json({ message: 'Device registered successfully' });

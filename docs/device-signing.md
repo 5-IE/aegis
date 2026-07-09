@@ -13,7 +13,7 @@ This sits on top of the existing JWT authentication — both the `Authorization`
 | Algorithm | P-256 ECDSA (secp256r1) |
 | Hash | SHA-256 |
 | Key storage (client) | iOS Secure Enclave |
-| Public key format | SPKI DER, base64-encoded |
+| Public key format | Raw X9.63 uncompressed point (65 bytes), base64-encoded; server wraps into SPKI DER before verifying |
 | Signature format | DER-encoded ECDSA signature, base64-encoded |
 | One key pair per | user × device |
 
@@ -50,13 +50,15 @@ The client and server must produce the exact same string independently.
 | `METHOD` | Uppercase HTTP method: `POST`, `GET`, … |
 | `PATH` | Path only — no host, no query string: `/api/v1/presence` |
 | `UNIX_TIMESTAMP_SECONDS` | Integer Unix epoch in seconds (same value sent in `X-Timestamp`) |
-| `SHA256_HEX(body)` | Lowercase hex SHA-256 of the raw request body bytes. For requests with no body use the SHA-256 of zero bytes: `e3b0c44298fc1c149afbf4c8996fb924` `27ae41e4649b934ca495991b7852b855` |
+| `SHA256_HEX(body)` | Lowercase hex SHA-256 of the raw request body bytes. For requests with no body use the SHA-256 of zero bytes: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
 
-**Example** — `POST /api/v1/presence` at timestamp `1720300000` with body `{"beacon_id":3}`:
+**Example** — `POST /api/v1/presence` at timestamp `1720300000` with body `{"room_id":3}`:
 
 ```
-POST\n/api/v1/presence\n1720300000\n9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+POST\n/api/v1/presence\n1720300000\n7908b1690837f426aa17e210db69e2e5871630968643d69854db097f1a16d402
 ```
+
+(This exact vector is locked by `Aegis-Backend/tests/lib/signingVector.test.ts`.)
 
 ---
 
@@ -95,7 +97,9 @@ let privateKey = try SecureEnclave.P256.Signing.PrivateKey()
 ### 2. Device registration (run once after key generation)
 
 ```swift
-let publicKeyBase64 = privateKey.publicKey.derRepresentation.base64EncodedString()
+// Export the raw X9.63 uncompressed point (65 bytes: 0x04 || X || Y).
+// The server wraps this into SPKI DER before verifying.
+let publicKeyBase64 = privateKey.publicKey.x963Representation.base64EncodedString()
 
 // POST /api/v1/register-device
 // Body: { "device_public_key": publicKeyBase64 }
@@ -165,9 +169,10 @@ request.setValue(sig, forHTTPHeaderField: "X-Signature")
 Location: `src/middleware/requireSignature.ts`
 
 ```typescript
-import { RequestHandler } from 'express';
-import { createHash, createVerify } from 'crypto';
+import type { RequestHandler } from 'express';
+import { createHash, createVerify } from 'node:crypto';
 import { AppError } from '../lib/errors.js';
+import { x963ToSpkiDer } from '../lib/deviceKey.js';
 import { findUserById } from '../db/queries/userQueries.js';
 
 const CLOCK_SKEW_MS = 60_000; // ±60 seconds
@@ -186,11 +191,10 @@ export const requireSignature: RequestHandler = async (req, _res, next) => {
 
     // 1. Validate timestamp freshness
     const timestamp = parseInt(tsHeader, 10);
-    if (isNaN(timestamp)) {
+    if (Number.isNaN(timestamp)) {
       return next(new AppError('invalid_request', 'X-Timestamp must be a Unix epoch integer'));
     }
-    const drift = Math.abs(Date.now() - timestamp * 1000);
-    if (drift > CLOCK_SKEW_MS) {
+    if (Math.abs(Date.now() - timestamp * 1000) > CLOCK_SKEW_MS) {
       return next(new AppError('invalid_request', 'Request timestamp is too old or too far in the future'));
     }
 
@@ -200,19 +204,22 @@ export const requireSignature: RequestHandler = async (req, _res, next) => {
       return next(new AppError('forbidden', 'No device registered for this account'));
     }
 
-    // 3. Reconstruct canonical payload
-    const rawBody: Buffer = (req as any).rawBody ?? Buffer.from(JSON.stringify(req.body));
+    // 3. Reconstruct canonical payload. Use originalUrl (query stripped) — NOT
+    //    req.path, which is relative to the router mount point (would be "/").
+    const path = req.originalUrl.split('?')[0];
+    const rawBody: Buffer = (req as unknown as { rawBody?: Buffer }).rawBody ?? Buffer.alloc(0);
     const bodyHash = createHash('sha256').update(rawBody).digest('hex');
-    const payload = `${req.method}\n${req.path}\n${timestamp}\n${bodyHash}`;
+    const payload = `${req.method}\n${path}\n${timestamp}\n${bodyHash}`;
 
-    // 4. Verify signature
-    const publicKeyDer = Buffer.from(user.device_public_key, 'base64');
+    // 4. Verify signature. The stored key is a raw X9.63 point; wrap it into
+    //    SPKI DER (see src/lib/deviceKey.ts) so Node's crypto can import it.
+    const spkiDer = x963ToSpkiDer(Buffer.from(user.device_public_key, 'base64'));
     const signatureDer = Buffer.from(sigHeader, 'base64');
 
     const verifier = createVerify('SHA256');
     verifier.update(payload);
     const valid = verifier.verify(
-      { key: publicKeyDer, format: 'der', type: 'spki', dsaEncoding: 'der' },
+      { key: spkiDer, format: 'der', type: 'spki', dsaEncoding: 'der' },
       signatureDer,
     );
 
@@ -225,6 +232,22 @@ export const requireSignature: RequestHandler = async (req, _res, next) => {
 };
 ```
 
+### Key wrapping: `src/lib/deviceKey.ts`
+
+The client sends the public key as a raw X9.63 uncompressed point (65 bytes:
+`0x04 || X || Y`). Node's `crypto.createVerify` needs an SPKI-DER key, so the
+middleware wraps the raw point by prepending the fixed 26-byte P-256 SPKI
+header (`3059301306072a8648ce3d020106082a8648ce3d030107034200`):
+
+```typescript
+export function x963ToSpkiDer(rawX963: Buffer): Buffer {
+  if (rawX963.length !== 65 || rawX963[0] !== 0x04) {
+    throw new AppError('forbidden', 'Malformed device public key');
+  }
+  return Buffer.concat([P256_SPKI_HEADER, rawX963]);
+}
+```
+
 ### Raw body preservation
 
 `crypto.createVerify` must see the exact bytes the client hashed. Add this before routes in `app.ts`:
@@ -232,7 +255,9 @@ export const requireSignature: RequestHandler = async (req, _res, next) => {
 ```typescript
 app.use(express.json({
   limit: '64kb',
-  verify: (req: any, _res, buf) => { req.rawBody = buf; },
+  verify: (req, _res, buf) => {
+    (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+  },
 }));
 ```
 
@@ -249,9 +274,13 @@ presenceRouter.post(
   requireAuth,
   requireRole('learner'),
   requireSignature,
+  presenceRateLimit,
   async (req, res, next) => { /* handler */ }
 );
 ```
+
+`requireSignature` runs before `presenceRateLimit` so unsigned or forged
+requests are rejected without consuming a caller's rate-limit budget.
 
 Routes that should require a signature:
 - `POST /api/v1/presence`
@@ -261,7 +290,9 @@ Routes that should require a signature:
 
 ### Server — Column size
 
-`USER.device_public_key` must be `VARCHAR(256)` to accommodate a base64-encoded SPKI DER P-256 public key (~124 characters). Migration `0007` sets this.
+`USER.device_public_key` is `VARCHAR(256)`, ample for a base64-encoded raw
+X9.63 P-256 point (~88 characters). Migration `0008` widens it (migration
+`0007` originally created the column as `VARCHAR(64)`, which is too small).
 
 ---
 

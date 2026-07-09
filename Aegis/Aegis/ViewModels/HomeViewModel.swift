@@ -93,7 +93,13 @@ class HomeViewModel: ObservableObject {
             let response = try await store.fetchAttendanceHistory()
             let attendanceHistoryData = response.list
             
-            self.attendanceHistory = attendanceHistoryData.map { Attendance(from: $0) }
+            self.attendanceHistory = attendanceHistoryData
+                .map { Attendance(from: $0) }
+                .sorted { lhs, rhs in
+                    Self.attendanceDate(from: lhs.date) > Self.attendanceDate(from: rhs.date)
+                }
+                .prefix(5)
+                .map { $0 }
             
         } catch let error as ApiError {
             self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
@@ -120,5 +126,11 @@ class HomeViewModel: ObservableObject {
         }
         
         isLoading = false
+
+    private static func attendanceDate(from value: String) -> Date {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E, d MMM yyyy"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.date(from: value) ?? .distantPast
     }
 }

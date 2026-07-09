@@ -9,6 +9,7 @@ protocol ApiServiceProtocol {
     func login(username: String, password: String) async throws -> LoginResponse
     func refreshToken(refreshToken: String) async throws -> AuthResponse
     func registerDevice(publicKey: String) async throws -> EmptyResponse
+    func sendPresence(roomId: Int, positionX: Double?, positionY: Double?, batteryLevel: Int?) async throws -> EmptyResponse
     func fetchProfile() async throws -> User
     func fetchDashboard() async throws -> DashboardData
     func fetchAttendanceHistory(month: Int?, year: Int?, page: Int?, perPage: Int?) async throws -> ListResponse<[AttendanceData]>
@@ -35,6 +36,13 @@ class ApiService: HttpService, ApiServiceProtocol {
     func registerDevice(publicKey: String) async throws -> EmptyResponse {
         let params = ["device_public_key": publicKey]
         return try await request("POST", endpoint: "/api/v1/register-device", params: params)
+    }
+    func sendPresence(roomId: Int, positionX: Double? = nil, positionY: Double? = nil, batteryLevel: Int? = nil) async throws -> EmptyResponse {
+        var params: [String: Any] = ["room_id": roomId]
+        if let positionX { params["position_x"] = positionX }
+        if let positionY { params["position_y"] = positionY }
+        if let batteryLevel { params["battery_level"] = batteryLevel }
+        return try await request("POST", endpoint: "/api/v1/presence", params: params)
     }
     func fetchProfile() async throws -> User {
         return try await request("GET", endpoint: "/api/v1/me")

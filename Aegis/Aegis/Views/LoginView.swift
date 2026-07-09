@@ -20,17 +20,11 @@ struct LoginView: View {
                 Spacer(minLength: 40)
 
                 // Logo
-                ZStack {
-                    RoundedRectangle(cornerRadius: 28)
-                        .fill(Color(red: 0.80, green: 0.85, blue: 0.90))
-                        .frame(width: 120, height: 120)
-                    Image(systemName: "shield.lefthalf.filled")
+                    Image("aegisicon")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 50, height: 50)
-                        .foregroundColor(Theme.primary)
-                }
-                .padding(.bottom, 40)
+                        .frame(width: 120, height: 120)
+                        .padding(.bottom, 40)
 
                 // Card
                 VStack(alignment: .leading, spacing: 18) {
@@ -107,3 +101,4 @@ struct LoginView: View {
     NavigationStack { LoginView()
         .environment(DataStore(apiService: ApiService())) }
 }
+

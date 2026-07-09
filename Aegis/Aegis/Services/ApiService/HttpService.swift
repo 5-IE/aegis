@@ -22,8 +22,14 @@ class HttpService {
         if !isFormData {
             headers["Content-Type"] = "application/json"
         }
-        
+
         return headers
+    }
+
+    /// Endpoints the backend protects with `requireSignature`. Signing other
+    /// requests is harmless but wasteful, so keep this to what the server checks.
+    private func requiresSignature(_ endpoint: String) -> Bool {
+        return endpoint == "/api/v1/presence"
     }
     
     // Core Request Method (Unified GET, POST, PATCH, DELETE)
@@ -47,10 +53,30 @@ class HttpService {
             request.setValue(value, forHTTPHeaderField: key)
         }
         
-        if let params = params {
-            request.httpBody = try? JSONSerialization.data(withJSONObject: params)
+        // Serialize the body once so the exact bytes we hash are the bytes we
+        // send. `bodyData` is Data() for bodyless requests — its SHA-256 is the
+        // empty-bytes constant the server also uses.
+        let bodyData: Data = (params != nil)
+            ? ((try? JSONSerialization.data(withJSONObject: params!)) ?? Data())
+            : Data()
+        if params != nil {
+            request.httpBody = bodyData
         }
-        
+
+        // Device signing: attach X-Timestamp / X-Signature on protected routes.
+        // `endpoint` is the path the server signs against (routers mount at
+        // /api/v1/...), so pass it verbatim — no host, no query string.
+        if requiresSignature(endpoint) {
+            if let (ts, sig) = try? CryptoManager.shared.signRequest(
+                method: method,
+                path: endpoint,
+                body: bodyData
+            ) {
+                request.setValue(ts, forHTTPHeaderField: "X-Timestamp")
+                request.setValue(sig, forHTTPHeaderField: "X-Signature")
+            }
+        }
+
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -102,6 +128,13 @@ class HttpService {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string: \(dateString)")
         }
         if (200...299).contains(httpResponse.statusCode) {
+            // 204 No Content (e.g. POST /presence) has an empty body. Return an
+            // EmptyResponse rather than failing to decode zero bytes.
+            if data.isEmpty || httpResponse.statusCode == 204 {
+                if let empty = EmptyResponse() as? T {
+                    return empty
+                }
+            }
             do {
                 return try decoder.decode(T.self, from: data)
             } catch {

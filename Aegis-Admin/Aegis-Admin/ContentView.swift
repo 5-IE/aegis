@@ -148,16 +148,8 @@ private struct LoginView: View {
             )
             .padding(.bottom, 10)
 
-            HStack {
-                Spacer()
-                Button("Forgot Password?") {
-                    viewModel.disabledFeatureMessage = "Password reset is not available yet."
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AegisColors.teal)
-            }
-            .padding(.bottom, 27)
+            Spacer()
+                .frame(height: 27)
 
             Button {
                 Task { await viewModel.signIn(sessionStore: sessionStore) }
@@ -185,24 +177,16 @@ private struct LoginView: View {
             .opacity(viewModel.canSubmit ? 1 : 0.58)
             .padding(.bottom, 28)
 
-            HStack(spacing: 4) {
-                Spacer()
-                Text("Don't have account?")
-                    .foregroundStyle(AegisColors.mutedText)
-                Button("Sign Up") {
-                    viewModel.disabledFeatureMessage = "Account registration is not available yet."
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(AegisColors.teal)
-                .fontWeight(.bold)
-                Spacer()
-            }
-            .font(.system(size: 12, weight: .semibold))
-
-            if let error = sessionStore.authError ?? viewModel.disabledFeatureMessage {
+            if let error = sessionStore.authError ?? viewModel.validationMessage {
                 Text(error)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color(red: 0.75, green: 0.12, blue: 0.12))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
+            } else if let notice = sessionStore.signedOutReason?.message {
+                Text(notice)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AegisColors.mutedText)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 20)
             }
@@ -526,6 +510,18 @@ private struct DashboardView: View {
                 attendancePanelHeader
                 AttendanceTable(rows: viewModel.overviewRows, state: viewModel.state)
                     .frame(minHeight: 180, maxHeight: .infinity)
+                AdminPaginationFooter(
+                    summary: viewModel.pageSummary,
+                    outcome: nil,
+                    canGoPrevious: viewModel.canGoPrevious,
+                    canGoNext: viewModel.canGoNext,
+                    previous: {
+                        Task { await viewModel.previousPage(sessionStore: sessionStore) }
+                    },
+                    next: {
+                        Task { await viewModel.nextPage(sessionStore: sessionStore) }
+                    }
+                )
             }
             .frame(maxHeight: .infinity)
         }
@@ -562,7 +558,14 @@ private struct DashboardView: View {
             SearchField(text: $viewModel.searchText, placeholder: "Search by Name...")
                 .frame(width: 210)
                 .onSubmit {
-                    Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
+                    Task { await viewModel.applyFilters(sessionStore: sessionStore) }
+                }
+                .onChange(of: viewModel.searchText) { oldValue, newValue in
+                    // Clearing the field reloads immediately; typed queries
+                    // still apply via Return (onSubmit).
+                    if !oldValue.isEmpty, newValue.isEmpty {
+                        Task { await viewModel.applyFilters(sessionStore: sessionStore) }
+                    }
                 }
 
             Menu {
@@ -570,9 +573,6 @@ private struct DashboardView: View {
                     ForEach(SessionFilter.allCases) { filter in
                         Text(filter.rawValue).tag(filter)
                     }
-                }
-                Button("Apply") {
-                    Task { await viewModel.reloadOverview(sessionStore: sessionStore) }
                 }
             } label: {
                 Image(systemName: "line.3.horizontal.decrease")
@@ -582,6 +582,9 @@ private struct DashboardView: View {
                     .background(Circle().fill(Color.white))
             }
             .menuStyle(.borderlessButton)
+            .onChange(of: viewModel.sessionFilter) { _, _ in
+                Task { await viewModel.applyFilters(sessionStore: sessionStore) }
+            }
         }
     }
 }
@@ -777,7 +780,7 @@ private struct LiveRadarView: View {
 
     private var radarMainColumn: some View {
         VStack(spacing: 20) {
-            RadarMapCard(points: viewModel.radarPoints, state: viewModel.state)
+            RadarMapCard(points: viewModel.radarPoints, beacons: viewModel.roomBeacons, state: viewModel.state)
                 .frame(minHeight: 280, idealHeight: 340, maxHeight: 380)
 
             WhitePanel {
@@ -851,7 +854,8 @@ private struct LiveRadarView: View {
             iconColor: Color(red: 0.93, green: 0.42, blue: 0.49),
             iconBackground: Color(red: 1.0, green: 0.68, blue: 0.72),
             title: "Room Temperature",
-            value: String(format: "%.1f\u{00B0}C", viewModel.metrics.temperature).replacingOccurrences(of: ".", with: ",")
+            value: String(format: "%.1f\u{00B0}C", viewModel.metrics.temperature).replacingOccurrences(of: ".", with: ","),
+            caption: "Sample data"
         )
     }
 
@@ -861,7 +865,8 @@ private struct LiveRadarView: View {
             iconColor: Color(red: 0.17, green: 0.58, blue: 0.70),
             iconBackground: Color(red: 0.66, green: 0.88, blue: 0.93),
             title: "Humidity",
-            value: "\(Int(viewModel.metrics.humidity.rounded()))%"
+            value: "\(Int(viewModel.metrics.humidity.rounded()))%",
+            caption: "Sample data"
         )
     }
 
@@ -898,6 +903,7 @@ private struct RoomTab: View {
 
 private struct RadarMapCard: View {
     let points: [RadarPoint]
+    let beacons: [AdminBeacon]
     let state: LoadState
 
     var body: some View {
@@ -910,11 +916,12 @@ private struct RadarMapCard: View {
                     LegendItem(color: AegisColors.activeGreen, label: "Active")
                     LegendItem(color: AegisColors.inactiveYellow, label: "Inactive")
                 }
-                RadarPlot(points: points)
+                RadarPlot(points: points, beacons: beacons)
+                    .clipped()
                     .overlay {
                         if case .loading = state {
                             ProgressView()
-                        } else if points.isEmpty {
+                        } else if points.isEmpty && beacons.isEmpty {
                             Text("No live map points.")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AegisColors.mutedText)
@@ -927,12 +934,7 @@ private struct RadarMapCard: View {
 
 private struct RadarPlot: View {
     let points: [RadarPoint]
-
-    private let beacons = [
-        BeaconMarkerData(label: "B01", x: 0.055, y: 0.085),
-        BeaconMarkerData(label: "B02", x: 0.955, y: 0.085),
-        BeaconMarkerData(label: "B03", x: 0.50, y: 0.90)
-    ]
+    let beacons: [AdminBeacon]
 
     var body: some View {
         GeometryReader { proxy in
@@ -953,48 +955,78 @@ private struct RadarPlot: View {
                 }
                 .stroke(Color(red: 0.30, green: 0.36, blue: 0.60).opacity(0.75), lineWidth: 1)
 
+                // Normalized 0-1 coordinates map into the inner room
+                // rectangle, so (1, 1) lands on the room border, not the
+                // card edge.
                 ForEach(points) { point in
                     Circle()
                         .fill(AegisColors.activeGreen)
                         .frame(width: 17, height: 17)
-                        .position(x: size.width * point.x, y: size.height * point.y)
+                        .position(plotPosition(x: point.x, y: point.y, in: plotRect))
                         .help(point.userName)
                 }
 
-                ForEach(beacons) { beacon in
-                    BeaconMarker(beacon: beacon)
-                        .position(x: size.width * beacon.x, y: size.height * beacon.y)
+                ForEach(placedBeacons) { beacon in
+                    BeaconMarker(label: beacon.name, isLabelBelow: beacon.y >= 0.5)
+                        .position(plotPosition(x: beacon.x, y: beacon.y, in: plotRect))
                 }
             }
         }
     }
+
+    /// Beacons with both positions set, clamped to 0-1. Beacons without a
+    /// position are simply not drawn.
+    private var placedBeacons: [PlacedBeacon] {
+        beacons.compactMap { beacon in
+            guard let x = beacon.positionX, let y = beacon.positionY else { return nil }
+            return PlacedBeacon(
+                id: beacon.id,
+                name: beacon.name,
+                x: min(max(x, 0), 1),
+                y: min(max(y, 0), 1)
+            )
+        }
+    }
+
+    private func plotPosition(x: Double, y: Double, in plotRect: CGRect) -> CGPoint {
+        CGPoint(
+            x: plotRect.minX + plotRect.width * x,
+            y: plotRect.minY + plotRect.height * y
+        )
+    }
 }
 
-private struct BeaconMarkerData: Identifiable {
-    let id = UUID()
-    let label: String
+private struct PlacedBeacon: Identifiable {
+    let id: Int
+    let name: String
     let x: Double
     let y: Double
 }
 
 private struct BeaconMarker: View {
-    let beacon: BeaconMarkerData
+    let label: String
+    /// When the marker sits in the lower half of the room, the label goes
+    /// below the dot so it stays inside the plot.
+    let isLabelBelow: Bool
 
     var body: some View {
         VStack(spacing: 2) {
-            if beacon.y < 0.5 { label }
+            if !isLabelBelow { labelText }
             Circle()
                 .fill(AegisColors.beaconBlue)
                 .overlay(Circle().stroke(Color.black.opacity(0.35), lineWidth: 1))
                 .frame(width: 16, height: 16)
-            if beacon.y >= 0.5 { label }
+            if isLabelBelow { labelText }
         }
     }
 
-    private var label: some View {
-        Text(beacon.label)
+    private var labelText: some View {
+        Text(label)
             .font(.system(size: 8, weight: .bold))
             .foregroundStyle(AegisColors.beaconBlue)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: 72)
     }
 }
 
@@ -1008,8 +1040,7 @@ private struct OccupantsTable: View {
                 ("Learner", .infinity),
                 ("Session", 100),
                 ("Duration", 130),
-                ("Status", 110),
-                ("Last Update", 110)
+                ("Status", 110)
             ])
 
             if case .loading = state {
@@ -1027,7 +1058,6 @@ private struct OccupantsTable: View {
                                 Text(row.status.titleCasedStatus)
                                     .foregroundStyle(statusColor(row.status))
                                     .tableCell(width: 110)
-                                Text("Now").tableCell(width: 110)
                             }
                             .frame(height: 46)
                             .overlay(alignment: .bottom) {
@@ -1126,10 +1156,10 @@ private struct SettingsView: View {
                         }
 
                         HStack {
-                            if let message = viewModel.saveMessage {
-                                Text(message)
+                            if let outcome = viewModel.saveOutcome {
+                                Text(outcome.text)
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(message == "Settings saved" ? AegisColors.activeGreen : Color.red)
+                                    .foregroundStyle(outcome.isSuccess ? AegisColors.activeGreen : Color.red)
                             }
                             Spacer()
                             Button {
@@ -1343,6 +1373,7 @@ private struct MetricCard: View {
     let iconBackground: Color
     let title: String
     let value: String
+    var caption: String?
 
     var body: some View {
         HStack(spacing: 20) {
@@ -1355,7 +1386,7 @@ private struct MetricCard: View {
             }
             .frame(width: 66, height: 66)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.black)
@@ -1364,6 +1395,11 @@ private struct MetricCard: View {
                 Text(value)
                     .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(.black)
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(AegisColors.mutedText)
+                }
             }
             Spacer(minLength: 0)
         }

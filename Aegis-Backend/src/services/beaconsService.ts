@@ -15,6 +15,8 @@ export interface BeaconResource {
   name: string;
   beacon_identifier: string;
   room_id: number | null;
+  position_x: number | null;
+  position_y: number | null;
   room_name: string | null;
 }
 
@@ -24,6 +26,8 @@ export function toBeaconResource(row: DeviceWithRoom): BeaconResource {
     name: row.name,
     beacon_identifier: row.identifier,
     room_id: row.id_room,
+    position_x: row.position_x,
+    position_y: row.position_y,
     room_name: row.room_name,
   };
 }
@@ -52,6 +56,8 @@ export async function createBeaconService(input: {
   name: string;
   beacon_identifier: string;
   room_id: number | null;
+  position_x?: number | null;
+  position_y?: number | null;
 }): Promise<BeaconResource> {
   if (input.room_id !== null) {
     const room = await findRoomById(input.room_id);
@@ -64,6 +70,8 @@ export async function createBeaconService(input: {
     name: input.name,
     identifier: input.beacon_identifier,
     id_room: input.room_id,
+    position_x: input.position_x ?? null,
+    position_y: input.position_y ?? null,
   });
   const row = await findDeviceById(id);
   if (!row) throw new AppError('internal_error', 'Device created but could not be read back');
@@ -72,7 +80,13 @@ export async function createBeaconService(input: {
 
 export async function updateBeaconService(
   id: number,
-  patch: { name?: string; beacon_identifier?: string; room_id?: number | null },
+  patch: {
+    name?: string;
+    beacon_identifier?: string;
+    room_id?: number | null;
+    position_x?: number | null;
+    position_y?: number | null;
+  },
 ): Promise<BeaconResource> {
   if (Object.keys(patch).length === 0) {
     throw new AppError('invalid_request', 'Empty patch');
@@ -93,10 +107,18 @@ export async function updateBeaconService(
   }
 
   // Translate the API-shaped patch to the DB-shaped patch.
-  const dbPatch: { name?: string; identifier?: string; id_room?: number | null } = {};
+  const dbPatch: {
+    name?: string;
+    identifier?: string;
+    id_room?: number | null;
+    position_x?: number | null;
+    position_y?: number | null;
+  } = {};
   if (patch.name !== undefined) dbPatch.name = patch.name;
   if (patch.beacon_identifier !== undefined) dbPatch.identifier = patch.beacon_identifier;
   if (patch.room_id !== undefined) dbPatch.id_room = patch.room_id;
+  if (patch.position_x !== undefined) dbPatch.position_x = patch.position_x;
+  if (patch.position_y !== undefined) dbPatch.position_y = patch.position_y;
 
   await updateDevice(id, dbPatch);
   const fresh = await findDeviceById(id);

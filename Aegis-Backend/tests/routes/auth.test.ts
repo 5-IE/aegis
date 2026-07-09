@@ -31,6 +31,7 @@ describe('POST /auth/login', () => {
     (svc.login as any).mockResolvedValue({
       accessToken: 'a', refreshToken: 'r', expiresIn: 900,
       user: { id: 1, username: 'alice', role: 'learner', session: 'AM', first_name: null, last_name: null, email: 'a@x' },
+      requireDeviceRegistration: true,
     });
     const res = await request(app)
       .post('/auth/login')
@@ -41,6 +42,7 @@ describe('POST /auth/login', () => {
       refresh_token: 'r',
       expires_in: 900,
       user: { id: 1, role: 'learner' },
+      require_device_registration: true,
     });
   });
 

@@ -1,0 +1,43 @@
+digraph change_map {
+  rankdir=LR;
+  bgcolor="white";
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled"];
+  edge [fontname="Helvetica", fontsize=9];
+
+  labelloc="t";
+  label=<<b>Implementation Change Map</b>  (green = new, orange = modify, gray = unchanged)>;
+
+  legend_new    [label="NEW",      fillcolor="#d6f5d6", shape=box, style="filled"];
+  legend_mod    [label="MODIFY",   fillcolor="#ffe6c7", shape=box, style="filled"];
+  legend_keep   [label="UNCHANGED",fillcolor="#eeeeee", shape=box, style="filled"];
+  legend_new -> legend_mod -> legend_keep [style=invis];
+
+  subgraph cluster_backend {
+    label=<<b>Aegis-Backend</b>>;
+    color="#6fbf7a";
+
+    mig      [label="migrations/0008_widen_device_public_key.sql\nVARCHAR(64) → VARCHAR(256)", fillcolor="#d6f5d6"];
+    mw       [label="src/middleware/requireSignature.ts\n(timestamp, rebuild, raw-X9.63 verify)", fillcolor="#d6f5d6"];
+    appts    [label="src/app.ts\nexpress.json({ verify: rawBody })", fillcolor="#ffe6c7"];
+    reg      [label="src/routes/registerDevice.ts\nlength cap 64 → 256", fillcolor="#ffe6c7"];
+    pres     [label="src/routes/presence.ts\nadd requireSignature after requireRole", fillcolor="#ffe6c7"];
+    tests    [label="tests/requireSignature.test.ts\n+ cross-lang known-answer vector", fillcolor="#d6f5d6"];
+    q        [label="db/queries/userQueries.ts\nupdateDevicePublicKey", fillcolor="#eeeeee"];
+
+    appts -> mw [style=invis];
+  }
+
+  subgraph cluster_ios {
+    label=<<b>Aegis (iOS)</b>>;
+    color="#7aa2e3";
+
+    crypto   [label="Services/CryptoManager.swift\nrewrite → SecureEnclave.P256\nsignRequest(method,path,body)", fillcolor="#ffe6c7"];
+    api      [label="Services/ApiService\nattach X-Timestamp / X-Signature\non presence request", fillcolor="#ffe6c7"];
+  }
+
+  crypto -> api [label="(ts, sig)"];
+  api    -> pres [label="signed POST /presence", color="#2c6cbf", fontcolor="#2c6cbf", constraint=false];
+  crypto -> reg  [label="x963 pubkey (first launch)", color="#2c6cbf", fontcolor="#2c6cbf", constraint=false];
+  mw -> q [label="findUserById key", style=dashed];
+}

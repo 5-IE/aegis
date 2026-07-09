@@ -11,6 +11,8 @@ beaconsRouter.get('/', requireAuth, async (_req, res, next) => {
       list: rows.map((r) => ({
         beacon_identifier: r.identifier,
         room_id: r.id_room,
+        position_x: r.position_x,
+        position_y: r.position_y,
         room_name: r.room_name,
       })),
     });

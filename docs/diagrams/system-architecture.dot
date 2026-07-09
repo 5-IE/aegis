@@ -1,0 +1,35 @@
+digraph architecture {
+  rankdir=LR;
+  bgcolor="white";
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", fillcolor="#ffffff"];
+  edge [fontname="Helvetica", fontsize=9];
+  labelloc="t";
+  label=<<b>Aegis — System Architecture</b>>;
+
+  subgraph cluster_edge {
+    label=<<b>Edge / IoT</b>>; style="rounded,filled"; fillcolor="#fdf3e7"; color="#e0a458";
+    beacon [label="ESP32 iBeacon\n(Aegis-Beacon)\nBLE advert, rotating minor\nevery 5 min", fillcolor="#ffffff"];
+  }
+
+  subgraph cluster_clients {
+    label=<<b>Clients (SwiftUI)</b>>; style="rounded,filled"; fillcolor="#eef4ff"; color="#7aa2e3";
+    learner [label="Learner app — iOS\n(Aegis)\nlogin · dashboard · history\ndevice registration + signing", fillcolor="#ffffff"];
+    admin [label="Admin app — macOS\n(Aegis-Admin)\nroster · rooms · beacons · users\nlive radar · config · reports", fillcolor="#ffffff"];
+  }
+
+  subgraph cluster_backend {
+    label=<<b>Backend (Node · TS · Express)</b>>; style="rounded,filled"; fillcolor="#eefaf0"; color="#6fbf7a";
+    api [label="REST API /api/v1\nJWT auth + rotating refresh\nrequireSignature on POST /presence", fillcolor="#ffffff"];
+    rollup [label="Nightly rollup (cron)\nPRESENCE_LOG → ATTENDANCE_HISTORY\nearly / late / absent / leave", fillcolor="#ffffff"];
+    db [shape=cylinder, label="MySQL 8\nUSER · ROOM · DEVICE\nPRESENCE_LOG · ATTENDANCE_HISTORY\nREFRESH_TOKEN · *_CONFIG", fillcolor="#ffffff"];
+    api -> db; rollup -> db [dir=both];
+  }
+
+  beacon -> learner [label="  BLE detect\n  (CoreLocation) — planned", style=dashed, color="#e0a458", fontcolor="#b9791f"];
+  learner -> api [label="  POST /presence (signed)\n  + auth/dashboard/history", color="#2c6cbf", fontcolor="#2c6cbf", penwidth=2];
+  admin -> api [label="  admin APIs", color="#2c6cbf", fontcolor="#2c6cbf", penwidth=2];
+
+  note [shape=note, fillcolor="#fff8dc", fontsize=9, label="Dashed edge = passive detection loop\n(beacon → CoreLocation → presence trigger)\nis on the roadmap; the signing + ingest\npath it feeds is built and tested."];
+  learner -> note [style=invis];
+}
