@@ -104,7 +104,7 @@ class DataStore {
         self.beacons = response.list
         return response
     }
-
+    
     func registerDevice(publicKey: String) async throws -> EmptyResponse {
         let response = try await apiService.registerDevice(publicKey: publicKey)
         
@@ -114,20 +114,7 @@ class DataStore {
         return response
     }
     
-    
-//    func addTransaction(_ transaction: Transaction) async throws {
-//        try await apiService.addTransaction(transaction)
-//        
-//        // Optimistically add to the local source of truth
-//        transactions.append(transaction)
-//        // Optionally re-sort if you want the store to enforce an order
-//        transactions.sort { $0.date > $1.date }
-//    }
-//    
-//    func deleteTransaction(_ id: UUID) async throws {
-//        try await apiService.deleteTransaction(id: id)
-//        
-//        // Optimistically remove from the local source of truth
-//        transactions.removeAll { $0.id == id }
-//    }
+    func sendPresence(roomId: Int, positionX: Double?, positionY: Double?, batteryLevel: Int?) async throws -> EmptyResponse {
+        return try await apiService.sendPresence(roomId: roomId, positionX: positionX, positionY: positionY, batteryLevel: batteryLevel)
+    }
 }

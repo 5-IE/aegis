@@ -8,8 +8,16 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var locationEngine = AcademyTracker()
     @State private var dataStore = DataStore(apiService: ApiService())
+    @StateObject private var locationService: LocationService
+    
+    init() {
+        // Note: You might need to initialize LocationService
+        // after dataStore is created.
+        let store = DataStore(apiService: ApiService())
+        _dataStore = State(wrappedValue: store)
+        _locationService = StateObject(wrappedValue: LocationService(dataStore: store))
+    }
 
     var body: some View {
         NavigationStack {

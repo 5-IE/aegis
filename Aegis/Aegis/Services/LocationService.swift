@@ -3,9 +3,9 @@ import CoreLocation
 import Combine
 import UIKit
 
-class AcademyTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
+class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
-    private let apiService: ApiServiceProtocol = ApiService()
+    private let dataStore: DataStore
     
     @Published var currentPosition: CGPoint = .zero
     
@@ -21,7 +21,8 @@ class AcademyTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
         BeaconAnchor(major: 244, minor: 2, x: 10.0, y: 0.0)
     ]
     
-    override init() {
+    init(dataStore: DataStore) {
+        self.dataStore = dataStore
         super.init()
         setupLocationManager()
     }
@@ -51,6 +52,10 @@ class AcademyTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
             // 3. Rate-limited network transmission
             if !isSending {
                 sendLocationToServer(x: newPosition.x, y: newPosition.y)
+            }
+        } else if beacons.count > 0 {
+            if !isSending {
+                sendLocationToServer(x: 0, y: 0)
             }
         }
     }
@@ -89,12 +94,18 @@ class AcademyTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
                 }
             }
             
-            try? await apiService.sendLocation(
-                roomId: 1,
-                positionX: (x * 100).rounded() / 100,
-                positionY: (y * 100).rounded() / 100,
-                batteryLevel: abs(Int(UIDevice.current.batteryLevel * 100))
-            )
+            do {
+                _ = try await dataStore.sendPresence(
+                    roomId: 1,
+                    positionX: (x * 100).rounded() / 100,
+                    positionY: (y * 100).rounded() / 100,
+                    batteryLevel: abs(Int(UIDevice.current.batteryLevel * 100))
+                )
+            } catch let error as ApiError {
+                print(error)
+            } catch {
+                print("Failed to send location: \(error.localizedDescription)")
+            }
         }
     }
 }
