@@ -188,6 +188,47 @@ enum SessionFilter: String, CaseIterable, Identifiable {
     var queryValue: String? { self == .all ? nil : rawValue }
 }
 
+enum AttendanceStatusFilter: String, CaseIterable, Identifiable, Hashable {
+    case onTime = "On-time"
+    case late = "Late"
+    case leave = "Leave"
+
+    var id: String { rawValue }
+
+    func matches(_ status: String) -> Bool {
+        let value = status.lowercased()
+        switch self {
+        case .onTime:
+            return value.contains("on time") || value.contains("checked in") || value.contains("early")
+        case .late:
+            return value.contains("late") || value.contains("running")
+        case .leave:
+            return value.contains("leave") || value.contains("checked out")
+        }
+    }
+}
+
+enum OccupantStatusFilter: String, CaseIterable, Identifiable, Hashable {
+    case active = "Active"
+    case inactive = "Inactive"
+
+    var id: String { rawValue }
+
+    func matches(_ status: String) -> Bool {
+        let value = status.lowercased()
+        switch self {
+        case .active:
+            return value.contains("on time") || value.contains("checked in") ||
+                (value.contains("active") && !value.contains("inactive")) ||
+                value.contains("early") || value.contains("late") ||
+                value.contains("running")
+        case .inactive:
+            return value.contains("leave") || value.contains("clocked out") ||
+                value.contains("inactive")
+        }
+    }
+}
+
 enum AdminUserRole: String, CaseIterable, Identifiable {
     case learner
     case admin

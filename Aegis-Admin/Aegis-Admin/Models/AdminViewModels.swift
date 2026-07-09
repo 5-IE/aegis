@@ -7,6 +7,7 @@ final class LoginViewModel: ObservableObject {
     @Published var password = ""
     @Published var isSigningIn = false
     @Published var validationMessage: String?
+    @Published var disabledFeatureMessage: String?
 
     var canSubmit: Bool {
         !isSigningIn
@@ -15,6 +16,7 @@ final class LoginViewModel: ObservableObject {
     func signIn(sessionStore: SessionStore) async {
         guard canSubmit else { return }
         validationMessage = nil
+        disabledFeatureMessage = nil
         sessionStore.clearAuthError()
 
         let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -41,6 +43,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var state: LoadState = .idle
     @Published var searchText = ""
     @Published var sessionFilter: SessionFilter = .all
+    @Published var statusFilters: Set<AttendanceStatusFilter> = []
     @Published var total = 0
     @Published var page = 1
     @Published var perPage = 100
@@ -86,6 +89,10 @@ final class DashboardViewModel: ObservableObject {
     func applyFilters(sessionStore: SessionStore) async {
         page = 1
         await runOverviewFetch(sessionStore: sessionStore)
+    }
+
+    func reloadOverview(sessionStore: SessionStore) async {
+        await applyFilters(sessionStore: sessionStore)
     }
 
     func nextPage(sessionStore: SessionStore) async {
@@ -135,7 +142,7 @@ final class DashboardViewModel: ObservableObject {
                 )
                 try Task.checkCancellation()
             }
-            overviewRows = result.rows
+            overviewRows = applyStatusFilters(to: result.rows)
             total = result.total
             page = result.page
             perPage = result.perPage
@@ -145,6 +152,13 @@ final class DashboardViewModel: ObservableObject {
         } catch {
             guard !Task.isCancelled else { return }
             state = .failed(readableMessage(for: error))
+        }
+    }
+
+    private func applyStatusFilters(to rows: [AttendanceOverviewRow]) -> [AttendanceOverviewRow] {
+        guard !statusFilters.isEmpty else { return rows }
+        return rows.filter { row in
+            statusFilters.contains { $0.matches(row.status) }
         }
     }
 }
@@ -159,6 +173,8 @@ final class LiveRadarViewModel: ObservableObject {
     @Published var metrics = RoomMetrics.empty
     @Published var state: LoadState = .idle
     @Published var occupantsSearchText = ""
+    @Published var occupantsSessionFilter: SessionFilter = .all
+    @Published var occupantsStatusFilters: Set<OccupantStatusFilter> = [.active]
 
     private var pollTask: Task<Void, Never>?
     private var selectTask: Task<Void, Never>?
@@ -173,8 +189,14 @@ final class LiveRadarViewModel: ObservableObject {
 
     var filteredOccupants: [Occupant] {
         let trimmed = occupantsSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return occupants }
-        return occupants.filter { $0.learner.localizedCaseInsensitiveContains(trimmed) }
+        return occupants.filter { occupant in
+            let matchesName = trimmed.isEmpty || occupant.learner.localizedCaseInsensitiveContains(trimmed)
+            let matchesSession = occupantsSessionFilter == .all ||
+                occupant.session.caseInsensitiveCompare(occupantsSessionFilter.rawValue) == .orderedSame
+            let matchesStatus = occupantsStatusFilters.isEmpty ||
+                occupantsStatusFilters.contains { $0.matches(occupant.status) }
+            return matchesName && matchesSession && matchesStatus
+        }
     }
 
     func load(sessionStore: SessionStore) async {
@@ -364,7 +386,7 @@ final class AdministrationViewModel: ObservableObject {
     @Published var page = 1
     @Published var perPage = 20
     @Published var searchText = ""
-    @Published var roleFilter: AdminUserRoleFilter = .all
+    @Published var roleFilter: AdminUserRoleFilter = .learner
     @Published var sessionFilter: SessionFilter = .all
     @Published var includeInactive = false
     @Published var state: LoadState = .idle
@@ -642,7 +664,7 @@ final class AdministrationViewModel: ObservableObject {
     }
 
     func beaconStatus(for room: Room) -> String {
-        (roomBeaconSummary[room.id]?.hasBeacons ?? false) ? "Assigned" : "No beacons"
+        beaconCount(for: room) > 0 ? "Active" : "Inactive"
     }
 
     // MARK: Load task management
@@ -801,6 +823,7 @@ final class ReportsViewModel: ObservableObject {
     /// When false the backend defaults to "yesterday" in its own timezone.
     @Published var useCustomDate = false
     @Published var rollupDate = Date()
+    @Published var dateText = ""
     @Published var userIDText = ""
     @Published var result: RollupResult?
     @Published var state: LoadState = .idle

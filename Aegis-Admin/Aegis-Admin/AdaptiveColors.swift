@@ -28,11 +28,6 @@ extension AegisColors {
         dark: Color(red: 0.62, green: 0.64, blue: 0.66)
     )
 
-    static let surface = Color(
-        light: Color(nsColor: NSColor.white.withAlphaComponent(0.94)),
-        dark: Color(red: 0.17, green: 0.17, blue: 0.18).opacity(0.94)
-    )
-
     static let surfaceSolid = Color(
         light: .white,
         dark: Color(red: 0.11, green: 0.11, blue: 0.12)
