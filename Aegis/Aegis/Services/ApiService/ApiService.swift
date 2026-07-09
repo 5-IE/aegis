@@ -14,7 +14,6 @@ protocol ApiServiceProtocol {
     func fetchDashboard() async throws -> DashboardData
     func fetchAttendanceHistory(month: Int?, year: Int?, page: Int?, perPage: Int?) async throws -> ListResponse<[AttendanceData]>
     func fetchBeacons() async throws -> ListResponse<[Beacon]>
-    func sendLocation(roomId: Int, positionX: Double, positionY: Double, batteryLevel: Int) async throws -> EmptyResponse
 }
 
 extension ApiServiceProtocol {
@@ -42,10 +41,6 @@ class ApiService: HttpService, ApiServiceProtocol {
         if let positionX { params["position_x"] = positionX }
         if let positionY { params["position_y"] = positionY }
         if let batteryLevel { params["battery_level"] = batteryLevel }
-        return try await request("POST", endpoint: "/api/v1/presence", params: params)
-    }
-    func sendLocation(roomId: Int, positionX: Double, positionY: Double, batteryLevel: Int) async throws -> EmptyResponse {
-        let params: [String: Any] = ["room_id": roomId, "position_x": positionX, "position_y": positionY, "battery_level": batteryLevel]
         return try await request("POST", endpoint: "/api/v1/presence", params: params)
     }
     func fetchProfile() async throws -> User {

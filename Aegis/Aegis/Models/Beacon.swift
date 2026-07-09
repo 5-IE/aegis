@@ -20,3 +20,10 @@ struct Beacon: Codable {
         case positionY = "position_y"
     }
 }
+
+struct BeaconAnchor {
+    let major: UInt16
+    let minor: UInt16
+    let x: Double?
+    let y: Double?
+}
