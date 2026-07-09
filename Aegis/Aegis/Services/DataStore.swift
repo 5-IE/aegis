@@ -24,6 +24,7 @@ class DataStore {
     var currentUser: User?
     var dashboardData: DashboardData?
     var attendanceHistoryData: [AttendanceData]?
+    var beacons: [Beacon]?
     
     private let apiService: ApiServiceProtocol
     
@@ -33,6 +34,8 @@ class DataStore {
         self.isLoggedIn =
         UserDefaults.standard.string(forKey: "aegis-refresh-token") != nil &&
         UserDefaults.standard.string(forKey: "aegis-access-token") != nil
+        
+        self.isRegistered = UserDefaults.standard.bool(forKey: "aegis-is-registered")
     }
     
     func loadInitialData() async {
@@ -89,12 +92,28 @@ class DataStore {
         self.attendanceHistoryData = attendanceHistoryData.list
         return attendanceHistoryData
     }
-
+    
     func fetchAttendanceHistory(month: Int, year: Int) async throws -> ListResponse<[AttendanceData]> {
         let attendanceHistoryData = try await apiService.fetchAttendanceHistory(month: month, year: year)
         self.attendanceHistoryData = attendanceHistoryData.list
         return attendanceHistoryData
     }
+    
+    func fetchBeacons() async throws -> ListResponse<[Beacon]> {
+        let response = try await apiService.fetchBeacons()
+        self.beacons = response.list
+        return response
+    }
+
+    func registerDevice(publicKey: String) async throws -> EmptyResponse {
+        let response = try await apiService.registerDevice(publicKey: publicKey)
+        
+        // Save the token using the exact key required by HttpService
+        UserDefaults.standard.set(true, forKey: "aegis-is-registered")
+
+        return response
+    }
+    
     
 //    func addTransaction(_ transaction: Transaction) async throws {
 //        try await apiService.addTransaction(transaction)

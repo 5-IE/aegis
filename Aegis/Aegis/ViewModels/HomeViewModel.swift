@@ -22,6 +22,7 @@ class HomeViewModel: ObservableObject {
     @Published var checkedInAt: String = ""
     @Published var todayStatus: TodayAttendanceStatus = .notCheckedIn
     @Published var attendanceHistory: [Attendance] = []
+    @Published var beacons: [Beacon] = []
     
     // State Management
     var isLoading: Bool = false
@@ -36,6 +37,7 @@ class HomeViewModel: ObservableObject {
             await self.fetchProfile(store: dataStore)
             await self.fetchDashboardData(store: dataStore)
             await self.fetchAttendanceHistoryData(store: dataStore)
+            await self.fetchBeacons(store: dataStore)
         }
     }
     
@@ -103,6 +105,24 @@ class HomeViewModel: ObservableObject {
                 }
                 .prefix(5)
                 .map { $0 }
+            
+        } catch let error as ApiError {
+            self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
+        } catch {
+            self.errorMessage = "An unexpected error occurred."
+        }
+        
+        isLoading = false
+    }
+    
+    func fetchBeacons(store: DataStore) async {
+        isLoading = true
+        
+        do {
+            let response = try await store.fetchBeacons()
+            let beaconsData = response.list
+            
+            self.beacons = beaconsData
             
         } catch let error as ApiError {
             self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"

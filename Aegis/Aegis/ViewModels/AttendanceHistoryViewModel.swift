@@ -52,8 +52,6 @@ class AttendanceHistoryViewModel: ObservableObject {
             let response = try await store.fetchAttendanceHistory(month: month, year: year)
             let attendanceHistoryData = response.list
             
-            print(response)
-            
             let mappedHistory = attendanceHistoryData.map { Attendance(from: $0) }
             self.attendanceHistory = Self.history(mappedHistory, matchesMonth: month, year: year)
                 ? mappedHistory
