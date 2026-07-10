@@ -862,6 +862,10 @@ final class ReportsViewModel: ObservableObject {
         "aegis-attendance-\(reportFromString)-\(reportToString).csv"
     }
 
+    var suggestedPDFFilename: String {
+        "aegis-attendance-\(reportFromString)-\(reportToString).pdf"
+    }
+
     /// Mirrors the backend zod validation: from <= to and range <= 92 days.
     /// Returns nil when valid.
     func validateReportRange() -> String? {

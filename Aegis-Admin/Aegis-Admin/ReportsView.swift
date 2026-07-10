@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ReportsView: View {
@@ -139,20 +140,20 @@ struct ReportsView: View {
             }
 
             HStack {
-                if let message = viewModel.message {
-                    Text(message)
+                if let outcome = viewModel.reportOutcome {
+                    Text(outcome.text)
                         .font(AegisTypography.caption)
-                        .foregroundStyle(message == "Rollup completed" ? AegisColors.activeGreen : .red)
+                        .foregroundStyle(outcome.isSuccess ? AegisColors.activeGreen : .red)
                 }
 
                 Spacer()
 
                 Button {
                     prepareRequest()
-                    Task { await viewModel.runRollup(sessionStore: sessionStore) }
+                    Task { await downloadReport() }
                 } label: {
                     Label(
-                        viewModel.isRunning ? "Generating..." : "Download Report",
+                        isExporting ? "Downloading..." : "Download Report",
                         systemImage: "square.and.arrow.down"
                     )
                     .font(AegisTypography.b2.weight(.bold))
@@ -162,10 +163,10 @@ struct ReportsView: View {
                     .background { AegisButtonBackground() }
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.isRunning)
+                .disabled(isExporting)
             }
 
-            if case let .failed(message) = viewModel.state {
+            if case let .failed(message) = viewModel.reportState {
                 ErrorBanner(message: message)
             }
         }
@@ -261,13 +262,140 @@ struct ReportsView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private var isExporting: Bool {
+        viewModel.isGeneratingReport || viewModel.isDownloadingCSV
+    }
+
     private func prepareRequest() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-01"
-        viewModel.dateText = formatter.string(from: fromMonth)
+        let calendar = Calendar.current
+        viewModel.reportFromDate = calendar.startOfDay(for: fromMonth)
+        viewModel.reportToDate = period == .singleMonth ? endOfMonth(for: fromMonth) : endOfMonth(for: toMonth)
         if scope == .allLearners {
             viewModel.userIDText = ""
         }
+    }
+
+    private func downloadReport() async {
+        if exportFormat == "Export as PDF" {
+            await downloadPDFReport()
+        } else {
+            await downloadCSVReport()
+        }
+    }
+
+    private func downloadCSVReport() async {
+        guard let data = await viewModel.downloadCSVData(sessionStore: sessionStore) else {
+            return
+        }
+        await saveReport(data, filename: viewModel.suggestedCSVFilename)
+    }
+
+    private func downloadPDFReport() async {
+        await viewModel.generateReport(sessionStore: sessionStore)
+        guard let report = viewModel.report else {
+            return
+        }
+        await saveReport(makeAttendanceReportPDF(report), filename: viewModel.suggestedPDFFilename)
+    }
+
+    private func saveReport(_ data: Data, filename: String) async {
+        do {
+            let downloadsURL = try FileManager.default.url(
+                for: .downloadsDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let fileURL = downloadsURL.appendingPathComponent(filename)
+            try data.write(to: fileURL, options: .atomic)
+            viewModel.reportOutcome = .success("Report saved to Downloads")
+        } catch {
+            viewModel.reportOutcome = .failure("Could not save report: \(error.localizedDescription)")
+        }
+    }
+
+    private func endOfMonth(for date: Date) -> Date {
+        let calendar = Calendar.current
+        guard let interval = calendar.dateInterval(of: .month, for: date),
+              let endDate = calendar.date(byAdding: .day, value: -1, to: interval.end) else {
+            return calendar.startOfDay(for: date)
+        }
+        return calendar.startOfDay(for: endDate)
+    }
+
+    private func makeAttendanceReportPDF(_ report: AttendanceReport) -> Data {
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let data = NSMutableData()
+        guard let consumer = CGDataConsumer(data: data),
+              let context = CGContext(consumer: consumer, mediaBox: nil, nil) else {
+            return Data()
+        }
+
+        let left: CGFloat = 54
+        let maxY: CGFloat = pageRect.height - 54
+        var y: CGFloat = 54
+        let titleAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.boldSystemFont(ofSize: 20),
+            .foregroundColor: NSColor.black
+        ]
+        let headingAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.boldSystemFont(ofSize: 12),
+            .foregroundColor: NSColor.black
+        ]
+        let bodyAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 10),
+            .foregroundColor: NSColor.black
+        ]
+
+        func beginPage() {
+            context.beginPDFPage([kCGPDFContextMediaBox as String: pageRect] as CFDictionary)
+            y = 54
+        }
+
+        func endPage() {
+            context.endPDFPage()
+        }
+
+        func ensureSpace(_ height: CGFloat) {
+            if y + height > maxY {
+                endPage()
+                beginPage()
+            }
+        }
+
+        func draw(_ text: String, attributes: [NSAttributedString.Key: Any] = bodyAttributes, height: CGFloat = 16) {
+            ensureSpace(height)
+            (text as NSString).draw(
+                in: CGRect(x: left, y: y, width: pageRect.width - (left * 2), height: height),
+                withAttributes: attributes
+            )
+            y += height
+        }
+
+        beginPage()
+        draw("Aegis Attendance Report", attributes: titleAttributes, height: 28)
+        draw("\(report.from) to \(report.to)", height: 18)
+        y += 10
+        draw("Summary", attributes: headingAttributes, height: 20)
+        draw("Learners: \(report.summary.learners)")
+        draw("Attendance rate: \(formatRatePercent(report.summary.attendanceRate))")
+        draw("Total late: \(report.summary.totalLate)")
+        draw("Total absent: \(report.summary.totalAbsent)")
+        y += 10
+        draw("Learners", attributes: headingAttributes, height: 20)
+        draw("Name | Session | Present | Late | Absent | Rate", attributes: headingAttributes)
+        for learner in report.perLearner {
+            draw("\(learner.name) | \(learner.session) | \(learner.present) | \(learner.late) | \(learner.absent) | \(formatRatePercent(learner.attendanceRate))")
+        }
+        y += 10
+        draw("Records", attributes: headingAttributes, height: 20)
+        draw("Date | Name | Session | Status | Clock in | Clock out", attributes: headingAttributes)
+        for record in report.records {
+            draw("\(record.date) | \(record.name) | \(record.session) | \(record.status.titleCasedStatus) | \(formatDateTime(record.clockedInAt)) | \(formatDateTime(record.clockedOutAt))")
+        }
+        endPage()
+        context.closePDF()
+        return data as Data
     }
 }
 
