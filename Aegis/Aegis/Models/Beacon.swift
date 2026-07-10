@@ -7,23 +7,25 @@
 
 import Foundation
 
-struct Beacon: Codable {
-    let beaconIdentifier: String
+struct Beacon {
+    let major: Int
+    let minor: Int
     let roomId: Int
-    let positionX: Double?
-    let positionY: Double?
-    
-    enum CodingKeys: String, CodingKey {
-        case beaconIdentifier = "beacon_identifier"
-        case roomId = "room_id"
-        case positionX = "position_x"
-        case positionY = "position_y"
-    }
-}
-
-struct BeaconAnchor {
-    let major: UInt16
-    let minor: UInt16
     let x: Double?
     let y: Double?
+}
+
+extension Beacon {
+    init(from apiModel: BeaconData) {
+        let components = apiModel.beaconIdentifier.components(separatedBy: ":")
+        
+        let major = Int(components.first ?? "0") ?? 0
+        let minor = Int(components.last ?? "0") ?? 0
+        
+        self.major = major
+        self.minor = minor
+        self.roomId = apiModel.roomId
+        self.x = apiModel.positionX
+        self.y = apiModel.positionY
+    }
 }

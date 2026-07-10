@@ -13,7 +13,7 @@ protocol ApiServiceProtocol {
     func fetchProfile() async throws -> User
     func fetchDashboard() async throws -> DashboardData
     func fetchAttendanceHistory(month: Int?, year: Int?, page: Int?, perPage: Int?) async throws -> ListResponse<[AttendanceData]>
-    func fetchBeacons() async throws -> ListResponse<[Beacon]>
+    func fetchBeacons() async throws -> ListResponse<[BeaconData]>
 }
 
 extension ApiServiceProtocol {
@@ -49,7 +49,7 @@ class ApiService: HttpService, ApiServiceProtocol {
     func fetchDashboard() async throws -> DashboardData {
         return try await request("GET", endpoint: "/api/v1/dashboard")
     }
-    func fetchBeacons() async throws -> ListResponse<[Beacon]> {
+    func fetchBeacons() async throws -> ListResponse<[BeaconData]> {
         return try await request("GET", endpoint: "/api/v1/beacons")
     }
     func fetchAttendanceHistory(month: Int?, year: Int?, page: Int?, perPage: Int?) async throws -> ListResponse<[AttendanceData]> {

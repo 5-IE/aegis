@@ -10,21 +10,20 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var currentPosition: CGPoint = .zero
     
     // State management
-    private var beaconDistances: [UInt16: Double] = [:]
+    private var beaconDistances: [Int: Double] = [:]
     private var isSending = false
     
     // Beacon Configuration
     private let targetUUID = UUID(uuidString: "26D0814C-F81C-4B2D-AC57-032E2AFF8642")!
-    private let anchors = [
-        BeaconAnchor(major: 244, minor: 0, x: 0.0, y: 0.0),
-        BeaconAnchor(major: 244, minor: 1, x: 5.0, y: 5.0),
-        BeaconAnchor(major: 244, minor: 2, x: 10.0, y: 0.0)
-    ]
+    private var anchors: [Beacon] = []
     
     init(dataStore: DataStore) {
         self.dataStore = dataStore
         super.init()
         setupLocationManager()
+        Task {
+            await self.fetchBeacons(store: dataStore)
+        }
     }
     
     private func setupLocationManager() {
@@ -37,39 +36,81 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
         let constraint = CLBeaconIdentityConstraint(uuid: targetUUID)
         locationManager.startRangingBeacons(satisfying: constraint)
     }
-
-    func locationManager(_ manager: CLLocationManager, didRange beacons: [CLBeacon], satisfying beaconConstraint: CLBeaconIdentityConstraint) {
-        // 1. Update our cache of distances
-        for beacon in beacons where beacon.accuracy >= 0 {
-            let minor = UInt16(beacon.minor.intValue)
-            beaconDistances[minor] = beacon.accuracy
-        }
-        
-        // 2. Try to calculate position
-        if let newPosition = performTrilateration() {
-            self.currentPosition = newPosition
+    
+    func fetchBeacons(store: DataStore) async {
+        do {
+            let response = try await store.fetchBeacons()
+            let beaconsData = response.list
             
-            // 3. Rate-limited network transmission
-            if !isSending {
-                sendLocationToServer(x: newPosition.x, y: newPosition.y)
-            }
-        } else if beacons.count > 0 {
-            if !isSending {
-                sendLocationToServer(x: 0, y: 0)
-            }
+            self.anchors = beaconsData.map { Beacon(from: $0) }
+            
+        } catch let error as URLError where error.code == .cancelled {
+            // Silently ignore cancellation errors
+            print("Request was cancelled - this is expected behavior.")
+        } catch let error as ApiError {
+            print("\(error.error ?? "Error") - \(error.message ?? "Something went wrong")")
+        } catch {
+            print("An unexpected error occurred.")
         }
     }
     
-    private func performTrilateration() -> CGPoint? {
-        // Ensure we have distances for minor 0, 1, and 2
-        guard let r0 = beaconDistances[0], let r1 = beaconDistances[1], let r2 = beaconDistances[2] else {
+    func locationManager(_ manager: CLLocationManager, didRange beacons: [CLBeacon], satisfying beaconConstraint: CLBeaconIdentityConstraint) {
+        // 1. Update our cache of distances
+        for beacon in beacons where beacon.accuracy >= 0 {
+            let minor = Int(beacon.minor.intValue)
+            beaconDistances[minor] = beacon.accuracy
+        }
+        
+        processBeaconData()
+    }
+    
+    private func processBeaconData() {
+        // Prevent processing if we are currently rate-limiting the network
+        guard !isSending else { return }
+        
+        // 1. Find the closest beacon from our active distances
+        guard let closestMinor = beaconDistances.min(by: { $0.value < $1.value })?.key,
+              let closestBeaconNode = anchors.first(where: { $0.minor == closestMinor }) else {
+            return
+        }
+        
+        let targetRoomId = closestBeaconNode.roomId
+        
+        // 2. Find all beacons that belong to this room AND have a current distance reading
+        let activeBeaconsInRoom = anchors
+            .filter { $0.roomId == targetRoomId }
+            .compactMap { beacon -> (beacon: Beacon, distance: Double)? in
+                guard let distance = beaconDistances[beacon.minor] else { return nil }
+                return (beacon, distance)
+            }
+            .sorted { $0.distance < $1.distance } // Sort from closest to furthest
+        
+        // 3. Route based on how many beacons are visible in the room
+        if activeBeaconsInRoom.count >= 3 {
+            // We have at least 3. Grab the closest 3 for the math.
+            let top3 = Array(activeBeaconsInRoom.prefix(3))
+            
+            if let position = performTrilateration(with: top3) {
+                self.currentPosition = position
+                sendLocationToServer(roomId: targetRoomId, x: position.x, y: position.y)
+            }
+        } else if activeBeaconsInRoom.count > 0 {
+            // Only 1 or 2 beacons visible in this room
+            sendLocationToServer(roomId: targetRoomId, x: 0, y: 0)
+        }
+    }
+    
+    private func performTrilateration(with data: [(beacon: Beacon, distance: Double)]) -> CGPoint? {
+        guard data.count == 3,
+              let x1 = data[0].beacon.x, let y1 = data[0].beacon.y,
+              let x2 = data[1].beacon.x, let y2 = data[1].beacon.y,
+              let x3 = data[2].beacon.x, let y3 = data[2].beacon.y else {
             return nil
         }
         
-        // Use the anchors corresponding to minors 0, 1, 2
-        let p1 = (x: 0.0, y: 0.0, r: r0)
-        let p2 = (x: 5.0, y: 0.0, r: r1)
-        let p3 = (x: 0.0, y: 5.0, r: r2)
+        let p1 = (x: x1, y: y1, r: data[0].distance)
+        let p2 = (x: x2, y: y2, r: data[1].distance)
+        let p3 = (x: x3, y: y3, r: data[2].distance)
         
         // Trilateration math
         let a = 2 * (p2.x - p1.x), b = 2 * (p2.y - p1.y)
@@ -80,23 +121,22 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
         let W = (a * e) - (b * d)
         guard W != 0 else { return nil }
         
-        print(CGPoint(x: (c * e - b * f) / W, y: (a * f - c * d) / W))
         return CGPoint(x: (c * e - b * f) / W, y: (a * f - c * d) / W)
     }
 
-    private func sendLocationToServer(x: CGFloat, y: CGFloat) {
+    private func sendLocationToServer(roomId: Int, x: CGFloat, y: CGFloat) {
         isSending = true
         Task {
             defer {
                 Task {
-                    try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
                     isSending = false
                 }
             }
             
             do {
                 _ = try await dataStore.sendPresence(
-                    roomId: 1,
+                    roomId: roomId,
                     positionX: (x * 100).rounded() / 100,
                     positionY: (y * 100).rounded() / 100,
                     batteryLevel: abs(Int(UIDevice.current.batteryLevel * 100))

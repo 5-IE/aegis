@@ -22,7 +22,6 @@ class HomeViewModel: ObservableObject {
     @Published var checkedInAt: String = ""
     @Published var todayStatus: TodayAttendanceStatus = .notCheckedIn
     @Published var attendanceHistory: [Attendance] = []
-    @Published var beacons: [Beacon] = []
     
     // State Management
     var isLoading: Bool = false
@@ -35,10 +34,10 @@ class HomeViewModel: ObservableObject {
     func requestData(dataStore: DataStore) async {
         if self.currentUser == nil {
             await self.fetchProfile(store: dataStore)
-            await self.fetchDashboardData(store: dataStore)
-            await self.fetchAttendanceHistoryData(store: dataStore)
-            await self.fetchBeacons(store: dataStore)
         }
+        
+        await self.fetchDashboardData(store: dataStore)
+        await self.fetchAttendanceHistoryData(store: dataStore)
     }
     
     private func setupTodayDate() {
@@ -53,6 +52,9 @@ class HomeViewModel: ObservableObject {
         do {
             let profile = try await store.fetchProfile()
             currentUser = profile
+        } catch let error as URLError where error.code == .cancelled {
+            // Silently ignore cancellation errors
+            print("Request was cancelled - this is expected behavior.")
         } catch let error as ApiError {
             self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
         } catch {
@@ -82,6 +84,9 @@ class HomeViewModel: ObservableObject {
                 apiStatus: dashboardData.todayStatus,
                 checkedInTime: self.checkedInAt
             )
+        } catch let error as URLError where error.code == .cancelled {
+            // Silently ignore cancellation errors
+            print("Request was cancelled - this is expected behavior.")
         } catch let error as ApiError {
             self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
         } catch {
@@ -106,27 +111,13 @@ class HomeViewModel: ObservableObject {
                 .prefix(5)
                 .map { $0 }
             
+        } catch let error as URLError where error.code == .cancelled {
+            // Silently ignore cancellation errors
+            print("Request was cancelled - this is expected behavior.")
         } catch let error as ApiError {
             self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
         } catch {
-            self.errorMessage = "An unexpected error occurred."
-        }
-        
-        isLoading = false
-    }
-    
-    func fetchBeacons(store: DataStore) async {
-        isLoading = true
-        
-        do {
-            let response = try await store.fetchBeacons()
-            let beaconsData = response.list
-            
-            self.beacons = beaconsData
-            
-        } catch let error as ApiError {
-            self.errorMessage = "\(error.error ?? "Error") - \(error.message ?? "Something went wrong")"
-        } catch {
+            print(error)
             self.errorMessage = "An unexpected error occurred."
         }
         

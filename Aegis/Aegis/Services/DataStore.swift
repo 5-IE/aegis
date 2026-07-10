@@ -24,7 +24,7 @@ class DataStore {
     var currentUser: User?
     var dashboardData: DashboardData?
     var attendanceHistoryData: [AttendanceData]?
-    var beacons: [Beacon]?
+    var beaconList: ListResponse<[BeaconData]>?
     
     private let apiService: ApiServiceProtocol
     
@@ -99,9 +99,12 @@ class DataStore {
         return attendanceHistoryData
     }
     
-    func fetchBeacons() async throws -> ListResponse<[Beacon]> {
+    func fetchBeacons() async throws -> ListResponse<[BeaconData]> {
+        if let beaconList = self.beaconList {
+            return beaconList
+        }
         let response = try await apiService.fetchBeacons()
-        self.beacons = response.list
+        self.beaconList = response
         return response
     }
     

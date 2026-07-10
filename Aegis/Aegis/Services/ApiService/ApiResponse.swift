@@ -93,3 +93,17 @@ struct AttendanceData: Codable {
         case status
     }
 }
+
+struct BeaconData: Codable {
+    let beaconIdentifier: String
+    let roomId: Int
+    let positionX: Double?
+    let positionY: Double?
+    
+    enum CodingKeys: String, CodingKey {
+        case beaconIdentifier = "beacon_identifier"
+        case roomId = "room_id"
+        case positionX = "position_x"
+        case positionY = "position_y"
+    }
+}
