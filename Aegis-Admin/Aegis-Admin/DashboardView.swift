@@ -30,15 +30,39 @@ struct DashboardView: View {
                 Text("Dashboard")
                     .screenTitle()
                 Spacer()
-                datePickerButton
+                HStack(spacing: 12) {
+                    refreshButton
+                    datePickerButton
+                }
             }
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Dashboard")
                     .screenTitle()
-                datePickerButton
+                HStack(spacing: 12) {
+                    refreshButton
+                    datePickerButton
+                }
             }
         }
+    }
+    
+    private var refreshButton: some View {
+        Button {
+            Task {
+                await viewModel.load(sessionStore: sessionStore)
+            }
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AegisColors.teal)
+                .frame(width: 40, height: 40) // Match height to your DateChip height
+                .background(Circle().fill(.ultraThinMaterial))
+                .overlay(
+                    Circle().stroke(AegisColors.panelBorder, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private var datePickerButton: some View {
