@@ -18,12 +18,19 @@ export async function insertPresenceLog(input: {
   positionX: number | null;
   positionY: number | null;
   batteryLevel: number | null;
+  timestamp?: Date | null;
 }): Promise<void> {
-  const [result] = await pool.query<ResultSetHeader>(
-    `INSERT INTO \`PRESENCE_LOG\` (\`id_user\`, \`id_room\`, \`position_x\`, \`position_y\`, \`battery_level\`)
-     VALUES (?, ?, ?, ?, ?)`,
-    [input.userId, input.roomId, input.positionX, input.positionY, input.batteryLevel],
-  );
+  const [result] = input.timestamp
+    ? await pool.query<ResultSetHeader>(
+        `INSERT INTO \`PRESENCE_LOG\` (\`id_user\`, \`id_room\`, \`position_x\`, \`position_y\`, \`battery_level\`, \`timestamp\`)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [input.userId, input.roomId, input.positionX, input.positionY, input.batteryLevel, input.timestamp],
+      )
+    : await pool.query<ResultSetHeader>(
+        `INSERT INTO \`PRESENCE_LOG\` (\`id_user\`, \`id_room\`, \`position_x\`, \`position_y\`, \`battery_level\`)
+         VALUES (?, ?, ?, ?, ?)`,
+        [input.userId, input.roomId, input.positionX, input.positionY, input.batteryLevel],
+      );
   // Prove the write landed: insertId + affectedRows are exactly what MySQL
   // committed. If this logs affectedRows:1 but the row is "missing", the query
   // ran against a different DB/host than the one being inspected.
@@ -102,6 +109,21 @@ export async function currentRoomPerUser(
     [startUtc, endUtc, stalenessSince],
   );
   return rows;
+}
+
+export async function insertPresenceLogAt(input: {
+  userId: number;
+  roomId: number;
+  positionX: number | null;
+  positionY: number | null;
+  batteryLevel: number | null;
+  timestamp: Date;
+}): Promise<void> {
+  await pool.query<ResultSetHeader>(
+    `INSERT INTO \`PRESENCE_LOG\` (\`id_user\`, \`id_room\`, \`position_x\`, \`position_y\`, \`battery_level\`, \`timestamp\`)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [input.userId, input.roomId, input.positionX, input.positionY, input.batteryLevel, input.timestamp],
+  );
 }
 
 export async function countPresenceLogsForRoom(roomId: number): Promise<number> {

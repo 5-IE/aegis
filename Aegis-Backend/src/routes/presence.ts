@@ -20,7 +20,14 @@ presenceRouter.post('/', requireAuth, requireRole('learner'), requireSignature, 
   const parsed = bodySchema.safeParse(req.body);
   if (!parsed.success) return next(new AppError('invalid_request'));
   try {
-    await recordPresence(req.user!.id, parsed.data);
+    // Use the client's X-Timestamp (from the phone's NTP-synced clock)
+    // instead of relying on CURRENT_TIMESTAMP, so presence times are
+    // accurate even when the server clock drifts.
+    const tsHeader = req.headers['x-timestamp'];
+    const clientTime = typeof tsHeader === 'string' && /^\d+$/.test(tsHeader)
+      ? new Date(parseInt(tsHeader, 10) * 1000)
+      : undefined;
+    await recordPresence(req.user!.id, parsed.data, clientTime);
     res.status(204).end();
   } catch (err) {
     next(err);
