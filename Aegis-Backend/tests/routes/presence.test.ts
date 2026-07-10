@@ -74,7 +74,7 @@ describe('POST /presence', () => {
       .set('Content-Type', 'application/json')
       .send(h.body);
     expect(res.status).toBe(204);
-    expect(svc.recordPresence).toHaveBeenCalledWith(42, bodyObj);
+    expect(svc.recordPresence).toHaveBeenCalledWith(42, bodyObj, expect.any(Date));
   });
 
   it('returns 400 when the request is not signed (missing headers)', async () => {

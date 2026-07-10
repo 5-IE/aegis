@@ -36,7 +36,7 @@ describe('recordPresence', () => {
     (rq.findRoomById as any).mockResolvedValue({ id_room: 3, name: 'Lab' });
     await svc.recordPresence(42, { room_id: 3, position_x: 1, position_y: 2, battery_level: 88 });
     expect(pq.insertPresenceLog).toHaveBeenCalledWith({
-      userId: 42, roomId: 3, positionX: 1, positionY: 2, batteryLevel: 88,
+      userId: 42, roomId: 3, positionX: 1, positionY: 2, batteryLevel: 88, timestamp: null,
     });
   });
 
@@ -51,7 +51,7 @@ describe('recordPresence', () => {
     (rq.findRoomById as any).mockResolvedValue({ id_room: 3, name: 'Lab' });
     await svc.recordPresence(42, { room_id: 3 });
     expect(pq.insertPresenceLog).toHaveBeenCalledWith({
-      userId: 42, roomId: 3, positionX: null, positionY: null, batteryLevel: null,
+      userId: 42, roomId: 3, positionX: null, positionY: null, batteryLevel: null, timestamp: null,
     });
   });
 });

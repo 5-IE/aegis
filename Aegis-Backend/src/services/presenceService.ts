@@ -5,6 +5,7 @@ import { insertPresenceLog } from '../db/queries/presenceQueries.js';
 export async function recordPresence(
   userId: number,
   input: { room_id: number; position_x?: number | null; position_y?: number | null; battery_level?: number | null },
+  clientTimestamp?: Date,
 ): Promise<void> {
   const room = await findRoomById(input.room_id);
   if (!room) throw new AppError('invalid_request', 'Unknown room_id');
@@ -14,5 +15,6 @@ export async function recordPresence(
     positionX: input.position_x ?? null,
     positionY: input.position_y ?? null,
     batteryLevel: input.battery_level ?? null,
+    timestamp: clientTimestamp ?? null,
   });
 }
