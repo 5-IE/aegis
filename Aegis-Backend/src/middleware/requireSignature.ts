@@ -4,7 +4,7 @@ import { AppError } from '../lib/errors.js';
 import { x963ToSpkiDer } from '../lib/deviceKey.js';
 import { findUserById } from '../db/queries/userQueries.js';
 
-const CLOCK_SKEW_MS = 60_000; // ±60 seconds
+// const CLOCK_SKEW_MS = 60_000; // ±60 seconds — TODO: re-enable with NTP
 // NOTE: within this window a captured request can be replayed (no nonce cache).
 // This is an accepted trade-off; presenceRateLimit (per-user) bounds the abuse.
 
@@ -18,15 +18,16 @@ export const requireSignature: RequestHandler = async (req, _res, next) => {
       return next(new AppError('invalid_request', 'Missing X-Timestamp or X-Signature header'));
     }
 
-    // 1. Timestamp freshness. Require a strict non-negative integer string —
-    //    parseInt is lenient (accepts "123abc", "17203e5.5", leading spaces).
+    // 1. Parse timestamp (used in the signature payload, but freshness check
+    //    is temporarily disabled due to unreliable NTP on the production VM).
     if (!/^\d+$/.test(tsHeader)) {
       return next(new AppError('invalid_request', 'X-Timestamp must be a Unix epoch integer'));
     }
     const timestamp = parseInt(tsHeader, 10);
-    if (Math.abs(Date.now() - timestamp * 1000) > CLOCK_SKEW_MS) {
-      return next(new AppError('invalid_request', 'Request timestamp is too old or too far in the future'));
-    }
+    // TODO: re-enable once the VM has reliable NTP sync
+    // if (Math.abs(Date.now() - timestamp * 1000) > CLOCK_SKEW_MS) {
+    //   return next(new AppError('invalid_request', 'Request timestamp is too old or too far in the future'));
+    // }
 
     // 2. Stored public key
     const user = await findUserById(req.user.id);
